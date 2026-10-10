@@ -470,9 +470,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   function playId(id, autoplay, noHist, plain) {
     var t = tracks.find(function (x) { return x.id === id; });
     if (!t) return;
-    // Local files and the generated demo use native media playback for stability,
-    // avoiding full-file decoding and keeping iOS background playback available.
-    if (t.local) plain = true;
+    // Stream local files through the prototype's original tape-effects graph.
+    // This avoids decoding entire songs and keeps background playback support.
     teardown();
     curId = id; bag = bag.filter(function (x) { return x !== id; });
     var a = new Audio(); a.preload = 'auto';
