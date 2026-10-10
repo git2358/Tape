@@ -472,7 +472,6 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     if (!t) return;
     teardown();
     curId = id; bag = bag.filter(function (x) { return x !== id; });
-    if (t.file && !plain) { loadBuffer(t, id, autoplay); renderList(); setLabels(); return; }
     var a = new Audio(); a.preload = 'auto';
     a.preservesPitch = false; a.mozPreservesPitch = false; a.webkitPreservesPitch = false;
     var remote = /^https?:/i.test(t.src);
