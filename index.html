@@ -369,9 +369,29 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   function setVol() {
     var v = +ui.vol.value;
     if (nodes.vol) nodes.vol.gain.setTargetAtTime(muted ? 0 : v * duck, ctx.currentTime, 0.03);
-    if (audio && audio.plain) audio.a.volume = Math.max(0, Math.min(1, muted ? 0 : v * duck));
+    if (audio && (audio.plain || audio.bypass)) audio.a.volume = Math.max(0, Math.min(1, muted ? 0 : v * duck));
+    else if (audio && audio.node) audio.a.volume = 1;
     var mb = $('#bMute'); if (mb) { mb.textContent = muted ? 'Unmute' : 'Mute'; mb.classList.toggle('go', muted); }
   }
+  function routeAudio() {
+    if (!audio || !audio.node || !ctx || !nodes) return;
+    try {
+      audio.node.disconnect();
+      if (tapeOn) {
+        audio.node.connect(nodes.input);
+        audio.bypass = false;
+        audio.a.volume = 1;
+      } else {
+        audio.node.connect(ctx.destination);
+        audio.bypass = true;
+        audio.a.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
+      }
+    } catch (e) {
+      audio.bypass = true;
+      audio.a.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
+    }
+  }
+
   function applyTape(forceCurve) {
     var v = function (id) { return +ui[id].value; };
     $('#oSpeed').textContent = '+' + v('speed').toFixed(1) + '%';
@@ -392,6 +412,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       var amt = on ? v('sat') : 0;
       if (forceCurve || amt !== nodes.satAmt) { nodes.sat.curve = makeCurve(amt); nodes.satAmt = amt; }
     }
+    routeAudio();
+    if (tapeOn && audio && !audio.a.paused && ctx && ctx.state === 'suspended') ctx.resume().catch(function () {});
     updateChips();
   }
   function targetRate(t) {
@@ -479,10 +501,10 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     if (remote && !plain) a.crossOrigin = 'anonymous';
     a.src = t.src;
     var node = null;
-    if (!plain) { initAudio(); try { node = ctx.createMediaElementSource(a); node.connect(nodes.input); } catch (e) { node = null; } }
-    audio = { a: a, node: node, plain: !!plain || !node, id: id };
+    if (!plain) { initAudio(); try { node = ctx.createMediaElementSource(a); } catch (e) { node = null; } }
+    audio = { a: a, node: node, plain: !!plain || !node, bypass: false, id: id };
     if (audio.plain) a.volume = Math.max(0, Math.min(1, muted ? 0 : +ui.vol.value * duck));
-    else a.volume = 1;
+    else routeAudio();
     a.addEventListener('loadedmetadata', function () { if (isFinite(a.duration) && a.duration > 0) { t.dur = a.duration; renderList(); } });
     a.addEventListener('playing', function () { failStreak = 0; if ('mediaSession' in navigator) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} } });
     a.addEventListener('pause', function () { if ('mediaSession' in navigator && (!audio || audio.a === a)) { try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {} } });
@@ -672,7 +694,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     $('#cShuf').classList.toggle('on', shuffle);
     $('#cRep').classList.toggle('on', repeat !== 'off');
     $('#cRep').textContent = repeat === 'one' ? 'REPEAT 1' : 'REPEAT';
-    $('#cTape').classList.toggle('on', tapeOn && !(audio && audio.plain));
+    $('#cTape').classList.toggle('on', tapeOn && !(audio && (audio.plain || audio.bypass)));
     $('#cSpd').classList.toggle('on', tapeOn);
     $('#cSpd').textContent = (tapeOn ? '+' + (+ui.speed.value).toFixed(1) : '+0.0') + '%';
     $('#mShuf').setAttribute('aria-pressed', String(shuffle));
@@ -691,7 +713,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
   function readSpectrum(dt, playing) {
     var vals = new Array(NB).fill(0), l = 0, r = 0;
-    if (playing && audio && !audio.plain && nodes.an) {
+    if (playing && audio && !audio.plain && !audio.bypass && nodes.an) {
       var an = nodes.an, sr = ctx.sampleRate, n = an.frequencyBinCount;
       if (!fbuf || fbuf.length !== n) fbuf = new Uint8Array(n);
       an.getByteFrequencyData(fbuf);
@@ -793,8 +815,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     if (a && rateAcc > 0.05) {
       rateAcc = 0;
       var rate = targetRate(ts / 1000) * (seekDir > 0 ? 3.5 : 1);
-      if (audio && !audio.plain && Math.abs(a.playbackRate - rate) > 0.0001) a.playbackRate = rate;
-      else if (audio && audio.plain && a.playbackRate !== 1) a.playbackRate = 1;
+      if (audio && !audio.plain && !audio.bypass && Math.abs(a.playbackRate - rate) > 0.001) a.playbackRate = rate;
+      else if (audio && (audio.plain || audio.bypass) && a.playbackRate !== 1) a.playbackRate = 1;
     }
     if (a && !seeking) ui.seek.value = dur ? Math.round(p * 1000) : 0;
     $('#sNow').textContent = fmt(now); $('#sDur').textContent = fmt(dur);
@@ -804,7 +826,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     $('#kRew').classList.toggle('latched', seekDir < 0); $('#kFf').classList.toggle('latched', seekDir > 0);
     $('#cMode').textContent = seekDir < 0 ? 'REW' : seekDir > 0 ? 'FF' : playing ? 'PLAY' : (a && now > 0 ? 'PAUSE' : 'STOP');
     $('#cMode').classList.toggle('on', playing || seekDir !== 0);
-    $('#cTape').classList.toggle('on', tapeOn && !(audio && audio.plain));
+    $('#cTape').classList.toggle('on', tapeOn && !(audio && (audio.plain || audio.bypass)));
     readSpectrum(dt, playing); drawViz();
     requestAnimationFrame(frame);
   }
