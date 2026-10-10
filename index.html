@@ -299,7 +299,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   /* ---------- state ---------- */
   var tracks = [], curId = null, nextId = 1, shuffle = false, repeat = 'off', tapeOn = true;
   var bag = [], hist = [], audio = null, ctx = null, nodes = {}, vizMode = 'spectrum', muted = false;
-  var duck = 1, seekDir = 0, seekTimer = null, dragId = null, seeking = false, failStreak = 0, loading = null;
+  var needsNativeBackgroundFallback = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  var duck = 1, seekDir = 0, seekTimer = null, dragId = null, seeking = false, failStreak = 0;
 
   function say(msg) { $('#status').textContent = msg || ''; }
   function fmt(s) { if (!isFinite(s) || s < 0) s = 0; var m = Math.floor(s / 60), r = Math.floor(s % 60); return m + ':' + (r < 10 ? '0' : '') + r; }
@@ -367,10 +368,16 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     applyTape(true); setVol();
   }
   function setVol() {
-    var v = +ui.vol.value;
-    if (nodes.vol) nodes.vol.gain.setTargetAtTime(muted ? 0 : v * duck, ctx.currentTime, 0.03);
-    if (audio && (audio.plain || audio.bypass)) audio.a.volume = Math.max(0, Math.min(1, muted ? 0 : v * duck));
-    else if (audio && audio.node) audio.a.volume = 1;
+    var v = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
+    if (nodes.vol && ctx) nodes.vol.gain.setTargetAtTime(muted ? 0 : (+ui.vol.value) * duck, ctx.currentTime, 0.03);
+    if (audio) {
+      if (audio.plain || audio.bypass) {
+        if (audio.a) audio.a.volume = v;
+      } else {
+        if (audio.fxA) audio.fxA.volume = 1;
+        if (audio.bgA) audio.bgA.volume = audio.a === audio.bgA ? v : (audio.bgA.paused ? 0 : 0.001);
+      }
+    }
     var mb = $('#bMute'); if (mb) { mb.textContent = muted ? 'Unmute' : 'Mute'; mb.classList.toggle('go', muted); }
   }
   function routeAudio() {
@@ -380,15 +387,15 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       if (tapeOn) {
         audio.node.connect(nodes.input);
         audio.bypass = false;
-        audio.a.volume = 1;
       } else {
         audio.node.connect(ctx.destination);
         audio.bypass = true;
-        audio.a.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
       }
+      if (audio.fxA) audio.fxA.volume = 1;
+      if (audio.bgA) audio.bgA.volume = audio.a === audio.bgA ? Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck)) : (audio.bgA.paused ? 0 : 0.001);
     } catch (e) {
       audio.bypass = true;
-      audio.a.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
+      if (audio.a) audio.a.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
     }
   }
 
@@ -417,88 +424,29 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
        Keep the selected speed stable during normal playback; the original tape EQ/saturation/hiss chain remains intact. */
     if (audio && !audio.plain && !audio.bypass) {
       var baseRate = tapeOn ? 1 + (+ui.speed.value) / 100 : 1;
-      if (Math.abs(audio.a.playbackRate - baseRate) > 0.001) audio.a.playbackRate = baseRate;
+      [audio.fxA, audio.bgA].forEach(function (el) { if (el && Math.abs(el.playbackRate - baseRate) > 0.001) el.playbackRate = baseRate; });
     }
     if (tapeOn && audio && !audio.a.paused && ctx && ctx.state === 'suspended') ctx.resume().catch(function () {});
     updateChips();
   }
-  function targetRate(t) {
-    if (!tapeOn) return 1;
-    var sp = 1 + (+ui.speed.value) / 100, d = (+ui.wow.value) / 100;
-    var w = 0.0016 * d * (Math.sin(6.283 * 0.6 * t) + 0.5 * Math.sin(6.283 * 1.7 * t + 1)) + 0.0006 * d * Math.sin(6.283 * 5.3 * t);
-    return sp * (1 + w);
-  }
 
   /* ---------- playback ---------- */
   function teardown() {
-    loading = null;
     if (!audio) return;
-    if (audio.a.dispose) audio.a.dispose();
-    else {
-      try { audio.a.pause(); audio.a.removeAttribute('src'); audio.a.load(); } catch (e) {}
-      try { if (audio.node) audio.node.disconnect(); } catch (e) {}
-    }
+    var old = audio;
+    [old.fxA, old.bgA, old.a].forEach(function (el) {
+      if (!el) return;
+      if (el.dispose) { el.dispose(); return; }
+      try { el.pause(); } catch (e) {}
+      try { el.removeAttribute('src'); el.load(); } catch (e) {}
+    });
+    try { if (old.node) old.node.disconnect(); } catch (e) {}
     audio = null;
   }
 
-  /* Plays a decoded buffer through the tape chain. Mimics the parts of an audio element the page uses. */
-  function BufferPlayer(buffer) {
-    var self = this, node = null, pos = 0, lastT = 0, rate = 1, paused = true, ended = false, L = {};
-    function sync() { if (!paused) { var t = ctx.currentTime; pos += (t - lastT) * rate; lastT = t; } }
-    function stopNode() { var n = node; node = null; if (n) { n.onended = null; try { n.stop(); } catch (e) {} try { n.disconnect(); } catch (e) {} } }
-    function emit(name) { (L[name] || []).slice().forEach(function (f) { f(); }); }
-    function start() {
-      stopNode();
-      var n = ctx.createBufferSource(); n.buffer = buffer; n.playbackRate.value = rate; n.connect(nodes.input);
-      node = n; lastT = ctx.currentTime; n.start(0, Math.min(pos, buffer.duration - 0.001));
-      n.onended = function () { if (node !== n) return; node = null; paused = true; ended = true; pos = buffer.duration; emit('ended'); };
-    }
-    Object.defineProperties(self, {
-      duration: { get: function () { return buffer.duration; } },
-      paused: { get: function () { return paused; } },
-      ended: { get: function () { return ended; } },
-      playbackRate: { get: function () { return rate; }, set: function (v) { sync(); rate = v; if (node) node.playbackRate.setTargetAtTime(v, ctx.currentTime, 0.02); } },
-      currentTime: {
-        get: function () { sync(); return Math.min(pos, buffer.duration); },
-        set: function (v) { sync(); pos = Math.max(0, Math.min(v, buffer.duration)); if (pos < buffer.duration) ended = false; if (!paused) start(); }
-      }
-    });
-    self.play = function () {
-      if (!paused) return Promise.resolve();
-      if (ended || pos >= buffer.duration - 0.01) pos = 0;
-      ended = false; paused = false; start(); emit('playing'); return Promise.resolve();
-    };
-    self.pause = function () { if (paused) return; sync(); paused = true; stopNode(); };
-    self.addEventListener = function (name, f) { (L[name] = L[name] || []).push(f); };
-    self.dispose = function () { paused = true; stopNode(); L = {}; };
-  }
-  function loadBuffer(t, id, autoplay) {
-    initAudio(); if (ctx.state === 'suspended') ctx.resume();
-    loading = id; say('Loading ' + t.title + '…');
-    t.file.arrayBuffer().then(function (ab) {
-      return new Promise(function (res, rej) { var p = ctx.decodeAudioData(ab, res, rej); if (p && p.catch) p.catch(rej); });
-    }).then(function (buf) {
-      if (loading !== id) return;
-      loading = null;
-      var bp = new BufferPlayer(buf);
-      t.dur = buf.duration;
-      audio = { a: bp, node: null, plain: false, id: id };
-      bp.addEventListener('ended', function () { next(true); });
-      bp.addEventListener('playing', function () { failStreak = 0; });
-      say('');
-      if (autoplay) bp.play();
-      renderList(); setLabels();
-    }).catch(function () {
-      if (loading !== id) return;
-      loading = null;
-      say('Could not decode ' + t.title + '. Playing it normally, without the tape effect.');
-      t.plain = true; playId(id, autoplay, true, true);
-    });
-  }
   function playId(id, autoplay, noHist, plain) {
     var t = tracks.find(function (x) { return x.id === id; });
     if (!t) return;
-    // Stream local files through the existing prototype effects graph; never decode the whole file.
     teardown();
     curId = id; bag = bag.filter(function (x) { return x !== id; });
     var a = new Audio(); a.preload = 'auto'; a.playsInline = true; a.setAttribute('playsinline', ''); a.setAttribute('webkit-playsinline', '');
@@ -508,31 +456,58 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     a.src = t.src;
     var node = null;
     if (!plain) { initAudio(); try { node = ctx.createMediaElementSource(a); } catch (e) { node = null; } }
-    audio = { a: a, node: node, plain: !!plain || !node, bypass: false, id: id };
+    var useEffects = !plain && !!node;
+    var bgA = null;
+    /* iOS can suspend Web Audio when Safari is backgrounded. Keep a second, native media
+       element playing quietly while visible, ready to take over without starting a new
+       playback session after the page has lost foreground activation. */
+    if (useEffects && needsNativeBackgroundFallback) {
+      bgA = new Audio(); bgA.preload = 'auto'; bgA.playsInline = true;
+      bgA.setAttribute('playsinline', ''); bgA.setAttribute('webkit-playsinline', '');
+      bgA.preservesPitch = false; bgA.mozPreservesPitch = false; bgA.webkitPreservesPitch = false;
+      bgA.src = t.src; bgA.volume = 0.001;
+    }
+    audio = { a: a, fxA: useEffects ? a : null, bgA: bgA, node: node, plain: !useEffects, bypass: false, id: id };
     if (audio.plain) a.volume = Math.max(0, Math.min(1, muted ? 0 : +ui.vol.value * duck));
     else routeAudio();
     a.addEventListener('loadedmetadata', function () { if (isFinite(a.duration) && a.duration > 0) { t.dur = a.duration; renderList(); } });
-    a.addEventListener('playing', function () { failStreak = 0; if ('mediaSession' in navigator) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} } });
-    a.addEventListener('pause', function () { if ('mediaSession' in navigator && (!audio || audio.a === a)) { try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {} } });
-    a.addEventListener('ended', function () { next(true); });
+    a.addEventListener('playing', function () { failStreak = 0; if ('mediaSession' in navigator && audio && audio.a === a) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} } });
+    a.addEventListener('pause', function () { if ('mediaSession' in navigator && audio && audio.a === a && (!audio.bgA || audio.bgA.paused)) { try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {} } });
+    a.addEventListener('ended', function () { if (audio && audio.a === a) next(true); });
     a.addEventListener('error', function () {
-      if (!audio || audio.a !== a) return;
+      if (!audio || audio.fxA !== a) return;
       if (remote && !plain) { say('That server blocks tape processing. Playing without the effect.'); t.plain = true; playId(id, autoplay, true, true); return; }
       t.bad = true; failStreak++; renderList(); say('Could not play ' + t.title + '.');
       if (failStreak < tracks.length) setTimeout(function () { if (curId === id) next(true); }, 500); else teardown();
     });
+    if (bgA) {
+      bgA.addEventListener('loadedmetadata', function () { if (isFinite(bgA.duration) && bgA.duration > 0 && (!t.dur || !isFinite(t.dur))) { t.dur = bgA.duration; renderList(); } });
+      bgA.addEventListener('playing', function () { if (audio && audio.a === bgA && 'mediaSession' in navigator) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} } });
+      bgA.addEventListener('pause', function () { if ('mediaSession' in navigator && audio && audio.a === bgA && bgA.paused && a.paused) { try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {} } });
+      bgA.addEventListener('ended', function () { if (audio && audio.a === bgA) next(true); });
+      bgA.addEventListener('error', function () { if (audio && audio.bgA === bgA && audio.a === bgA) { say('Background-safe audio could not start; return to Safari and press Play.'); } });
+    }
     if (autoplay) {
-      /* On iOS, call resume() and play() immediately in the same user gesture.
-         Waiting for resume() to resolve can lose Safari's transient user activation. */
-      var resumePromise = (!audio.plain && ctx && ctx.state !== 'running') ? ctx.resume() : Promise.resolve();
-      var playPromise = a.play();
-      if (playPromise && playPromise.catch) playPromise.catch(function () { say('Press play to start.'); });
-      if (resumePromise && resumePromise.catch) resumePromise.catch(function () {});
+      if (bgA && document.hidden) {
+        audio.a = bgA; bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
+        try { a.pause(); } catch (e) {}
+        var hiddenPlay = bgA.play(); if (hiddenPlay && hiddenPlay.catch) hiddenPlay.catch(function () { say('Return to Safari and press Play to resume.'); });
+      } else {
+        var resumePromise = (useEffects && ctx && ctx.state !== 'running') ? ctx.resume() : Promise.resolve();
+        var playPromise = a.play();
+        if (bgA) { bgA.currentTime = 0; bgA.playbackRate = a.playbackRate; var standbyPlay = bgA.play(); if (standbyPlay && standbyPlay.catch) standbyPlay.catch(function () {}); }
+        if (playPromise && playPromise.catch) playPromise.catch(function () {
+          if (audio && audio.id === id && bgA) { audio.a = bgA; bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck)); bgA.play().catch(function () {}); say('Using native playback; tape processing will return when available.'); }
+          else say('Press play to start.');
+        });
+        if (resumePromise && resumePromise.catch) resumePromise.catch(function () {});
+      }
     }
     if (!noHist && shuffle) { /* history is pushed by next() */ }
     renderList(); setLabels();
   }
-  function stopAtEnd() { if (audio) { audio.a.pause(); audio.a.currentTime = 0; } say(''); }
+
+  function stopAtEnd() { if (audio) { audio.a.pause(); audio.a.currentTime = 0; if (audio.fxA && audio.fxA !== audio.a) { audio.fxA.pause(); audio.fxA.currentTime = 0; } if (audio.bgA && audio.bgA !== audio.a) { audio.bgA.pause(); audio.bgA.currentTime = 0; } } say(''); }
   function next(auto) {
     if (!tracks.length) return;
     if (auto && repeat === 'one' && audio) { audio.a.currentTime = 0; audio.a.play().catch(function () {}); return; }
@@ -561,20 +536,40 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   }
   function togglePlay() {
     initAudio();
-    if (loading != null) return;
     if (!audio) {
       if (!tracks.length) { say('Add some songs first.'); return; }
       var id = shuffle ? tracks[Math.floor(Math.random() * tracks.length)].id : tracks[0].id;
       playId(id, true, true); return;
     }
     if (audio.a.paused) {
-      var rp = (!audio.plain && ctx && ctx.state !== 'running') ? ctx.resume() : null;
-      var pp = audio.a.play();
-      if (pp && pp.catch) pp.catch(function () { say('Press play to start.'); });
-      if (rp && rp.catch) rp.catch(function () {});
-    } else audio.a.pause();
+      if (audio.bgA && document.hidden) {
+        audio.a = audio.bgA; audio.bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
+        audio.bgA.play().catch(function () { say('Return to Safari and press Play to resume.'); });
+      } else if (audio.bgA && audio.fxA) {
+        var currentPos = audio.a === audio.bgA ? audio.bgA.currentTime : audio.fxA.currentTime;
+        audio.fxA.currentTime = currentPos; audio.bgA.currentTime = currentPos;
+        audio.bgA.volume = 0.001; audio.bgA.play().catch(function () {});
+        var currentAudio = audio;
+        var rp = ctx && ctx.state !== 'running' ? ctx.resume() : Promise.resolve();
+        var pp = audio.fxA.play();
+        if (pp && pp.then) pp.then(function () {
+          if (audio === currentAudio && !document.hidden && ctx && ctx.state === 'running') currentAudio.a = currentAudio.fxA;
+        }).catch(function () { currentAudio.a = currentAudio.bgA; currentAudio.bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck)); });
+        if (rp && rp.catch) rp.catch(function () {});
+      } else {
+        var rp2 = (!audio.plain && ctx && ctx.state !== 'running') ? ctx.resume() : null;
+        var pp2 = audio.a.play();
+        if (pp2 && pp2.catch) pp2.catch(function () { say('Press play to start.'); });
+        if (rp2 && rp2.catch) rp2.catch(function () {});
+      }
+    } else {
+      audio.a.pause();
+      if (audio.fxA && audio.fxA !== audio.a) audio.fxA.pause();
+      if (audio.bgA && audio.bgA !== audio.a) audio.bgA.pause();
+    }
   }
-  function stop() { if (audio) { audio.a.pause(); audio.a.currentTime = 0; } }
+
+  function stop() { if (audio) { audio.a.pause(); audio.a.currentTime = 0; if (audio.fxA && audio.fxA !== audio.a) { audio.fxA.pause(); audio.fxA.currentTime = 0; } if (audio.bgA && audio.bgA !== audio.a) { audio.bgA.pause(); audio.bgA.currentTime = 0; } } }
   function startSeek(d) {
     if (!audio) return;
     seekDir = d; duck = d < 0 ? 0.25 : 1; setVol();
@@ -714,15 +709,16 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
   /* ---------- reels and display loop ---------- */
   var hubL = $('#hubL'), hubR = $('#hubR'), packL = $('#packL'), packR = $('#packR'), tapeLine = $('#tapeLine');
-  var angL = 0, angR = 0, lastTs = 0, rateAcc = 0;
+  var angL = 0, angR = 0, lastTs = 0;
   var viz = $('#viz'), vctx = viz.getContext('2d');
   var NB = 20, ROWS = 14, SEGS = 38;
-  var levels = new Array(NB).fill(0), peaks = new Array(NB).fill(0), lvlL = 0, lvlR = 0, pkL = 0, pkR = 0;
+  var levels = new Array(NB).fill(0), peaks = new Array(NB).fill(0), spectrumVals = new Array(NB).fill(0), lvlL = 0, lvlR = 0, pkL = 0, pkR = 0;
   var fbuf = null, tbuf = null, cs = getComputedStyle(document.documentElement);
   var C = { on: cs.getPropertyValue('--vfd').trim(), hi: cs.getPropertyValue('--vfd-hi').trim(), dim: cs.getPropertyValue('--vfd-dim').trim() };
 
   function readSpectrum(dt, playing) {
-    var vals = new Array(NB).fill(0), l = 0, r = 0;
+    var vals = spectrumVals, l = 0, r = 0;
+    for (var z = 0; z < NB; z++) vals[z] = 0;
     if (playing && audio && !audio.plain && !audio.bypass && nodes.an) {
       var an = nodes.an, sr = ctx.sampleRate, n = an.frequencyBinCount;
       if (!fbuf || fbuf.length !== n) fbuf = new Uint8Array(n);
@@ -823,12 +819,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
     /* Avoid frequent playbackRate writes on iOS: they can cause audible dropouts/stutter.
        Preserve normal tape speed and the other effects; fast-forward remains temporary. */
-    if (a && audio && !audio.plain && !audio.bypass && seekDir > 0) {
-      var fastRate = (tapeOn ? 1 + (+ui.speed.value) / 100 : 1) * 3.5;
-      if (Math.abs(a.playbackRate - fastRate) > 0.02) a.playbackRate = fastRate;
-    } else if (a && audio && !audio.plain && !audio.bypass) {
-      var steadyRate = tapeOn ? 1 + (+ui.speed.value) / 100 : 1;
-      if (Math.abs(a.playbackRate - steadyRate) > 0.02) a.playbackRate = steadyRate;
+    if (a && audio && !audio.plain && !audio.bypass) {
+      var target = (tapeOn ? 1 + (+ui.speed.value) / 100 : 1) * (seekDir > 0 ? 3.5 : 1);
+      [audio.fxA, audio.bgA].forEach(function (el) { if (el && Math.abs(el.playbackRate - target) > 0.02) el.playbackRate = target; });
     } else if (a && a.playbackRate !== 1) a.playbackRate = 1;
     if (a && !seeking) ui.seek.value = dur ? Math.round(p * 1000) : 0;
     $('#sNow').textContent = fmt(now); $('#sDur').textContent = fmt(dur);
@@ -952,24 +945,60 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     else if (e.key === 'n') next(false); else if (e.key === 'p') prev();
   });
 
+  function switchToBackgroundAudio() {
+    if (!audio || !audio.bgA || audio.plain || audio.a === audio.bgA || audio.a.paused || !audio.fxA) return;
+    var current = audio;
+    try {
+      current.bgA.currentTime = current.fxA.currentTime;
+      current.bgA.playbackRate = current.fxA.playbackRate;
+    } catch (e) {}
+    current.a = current.bgA;
+    current.bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
+    var p = current.bgA.play(); if (p && p.catch) p.catch(function () { say('Background playback could not resume; return to Safari and press Play.'); });
+    try { current.fxA.pause(); } catch (e) {}
+    if ('mediaSession' in navigator) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} }
+  }
+  function switchToEffectsAudio() {
+    if (!audio || !audio.bgA || audio.plain || audio.a !== audio.bgA || audio.bgA.paused || !audio.fxA) return;
+    var current = audio, bg = current.bgA, fx = current.fxA;
+    try { fx.currentTime = bg.currentTime; fx.playbackRate = bg.playbackRate; } catch (e) {}
+    var resume = ctx && ctx.state !== 'running' ? ctx.resume() : Promise.resolve();
+    resume.then(function () {
+      if (audio !== current || document.hidden || bg.paused) return;
+      var p = fx.play();
+      if (p && p.then) p.then(function () {
+        if (audio !== current || document.hidden || !ctx || ctx.state !== 'running') { try { fx.pause(); } catch (e) {} return; }
+        current.a = fx; bg.volume = 0.001;
+        if ('mediaSession' in navigator) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} }
+      }).catch(function () {});
+    }).catch(function () {});
+  }
   if ('mediaSession' in navigator) {
     try {
-      navigator.mediaSession.setActionHandler('play', function () { if (audio) { var rp = (!audio.plain && ctx && ctx.state !== 'running') ? ctx.resume() : null; var pp = audio.a.play(); if (pp && pp.catch) pp.catch(function () {}); if (rp && rp.catch) rp.catch(function () {}); } else togglePlay(); });
-      navigator.mediaSession.setActionHandler('pause', function () { if (audio) audio.a.pause(); });
+      navigator.mediaSession.setActionHandler('play', function () {
+        if (!audio) { togglePlay(); return; }
+        if (audio.bgA && document.hidden) {
+          audio.a = audio.bgA; audio.bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
+          audio.bgA.play().catch(function () {});
+        } else togglePlay();
+      });
+      navigator.mediaSession.setActionHandler('pause', function () {
+        if (!audio) return;
+        if (audio.a) audio.a.pause();
+        if (audio.fxA && audio.fxA !== audio.a) audio.fxA.pause();
+        if (audio.bgA && audio.bgA !== audio.a) audio.bgA.pause();
+      });
       navigator.mediaSession.setActionHandler('previoustrack', prev);
       navigator.mediaSession.setActionHandler('nexttrack', function () { next(false); });
-      navigator.mediaSession.setActionHandler('seekbackward', function (d) { if (audio) audio.a.currentTime = Math.max(0, audio.a.currentTime - (d.seekOffset || 10)); });
-      navigator.mediaSession.setActionHandler('seekforward', function (d) { if (audio) audio.a.currentTime = Math.min(isFinite(audio.a.duration) ? audio.a.duration : Infinity, audio.a.currentTime + (d.seekOffset || 10)); });
+      navigator.mediaSession.setActionHandler('seekbackward', function (d) { if (audio) { var p = Math.max(0, audio.a.currentTime - (d.seekOffset || 10)); audio.a.currentTime = p; if (audio.fxA) audio.fxA.currentTime = p; if (audio.bgA) audio.bgA.currentTime = p; } });
+      navigator.mediaSession.setActionHandler('seekforward', function (d) { if (audio) { var p = Math.min(isFinite(audio.a.duration) ? audio.a.duration : Infinity, audio.a.currentTime + (d.seekOffset || 10)); audio.a.currentTime = p; if (audio.fxA) audio.fxA.currentTime = p; if (audio.bgA) audio.bgA.currentTime = p; } });
     } catch (e) {}
   }
   document.addEventListener('visibilitychange', function () {
-    /* Do not pause, recreate or reroute the media element on background/foreground transitions.
-       Resume only when Safari returns to the page; background playback must continue natively. */
-    if (!document.hidden && ctx && ctx.state !== 'running' && audio && !audio.a.paused) ctx.resume().catch(function () {});
+    if (document.hidden) switchToBackgroundAudio();
+    else switchToEffectsAudio();
   });
-  window.addEventListener('pageshow', function () {
-    if (ctx && ctx.state !== 'running' && audio && !audio.a.paused) ctx.resume().catch(function () {});
-  });
+  window.addEventListener('pageshow', function () { if (!document.hidden) switchToEffectsAudio(); });
 
   /* ---------- start ---------- */
   loadSettings(); applyTape(); updateChips(); setLabels(); renderList();
