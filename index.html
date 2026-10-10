@@ -501,7 +501,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     // Stream local files through the existing prototype effects graph; never decode the whole file.
     teardown();
     curId = id; bag = bag.filter(function (x) { return x !== id; });
-    var a = new Audio(); a.preload = 'auto';
+    var a = new Audio(); a.preload = 'auto'; a.playsInline = true; a.setAttribute('playsinline', ''); a.setAttribute('webkit-playsinline', '');
     a.preservesPitch = false; a.mozPreservesPitch = false; a.webkitPreservesPitch = false;
     var remote = /^https?:/i.test(t.src);
     if (remote && !plain) a.crossOrigin = 'anonymous';
@@ -522,13 +522,12 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       if (failStreak < tracks.length) setTimeout(function () { if (curId === id) next(true); }, 500); else teardown();
     });
     if (autoplay) {
-      var startPlayback = function () {
-        var p = a.play();
-        if (p && p.catch) p.catch(function () { say('Press play to start.'); });
-      };
-      if (!audio.plain && ctx && ctx.state === 'suspended') {
-        ctx.resume().then(startPlayback).catch(startPlayback);
-      } else startPlayback();
+      /* On iOS, call resume() and play() immediately in the same user gesture.
+         Waiting for resume() to resolve can lose Safari's transient user activation. */
+      var resumePromise = (!audio.plain && ctx && ctx.state !== 'running') ? ctx.resume() : Promise.resolve();
+      var playPromise = a.play();
+      if (playPromise && playPromise.catch) playPromise.catch(function () { say('Press play to start.'); });
+      if (resumePromise && resumePromise.catch) resumePromise.catch(function () {});
     }
     if (!noHist && shuffle) { /* history is pushed by next() */ }
     renderList(); setLabels();
@@ -561,14 +560,19 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     playId(tracks[i].id, true, true);
   }
   function togglePlay() {
-    initAudio(); if (ctx.state === 'suspended') ctx.resume();
+    initAudio();
     if (loading != null) return;
     if (!audio) {
       if (!tracks.length) { say('Add some songs first.'); return; }
       var id = shuffle ? tracks[Math.floor(Math.random() * tracks.length)].id : tracks[0].id;
       playId(id, true, true); return;
     }
-    if (audio.a.paused) audio.a.play().catch(function () { say('Press play to start.'); }); else audio.a.pause();
+    if (audio.a.paused) {
+      var rp = (!audio.plain && ctx && ctx.state !== 'running') ? ctx.resume() : null;
+      var pp = audio.a.play();
+      if (pp && pp.catch) pp.catch(function () { say('Press play to start.'); });
+      if (rp && rp.catch) rp.catch(function () {});
+    } else audio.a.pause();
   }
   function stop() { if (audio) { audio.a.pause(); audio.a.currentTime = 0; } }
   function startSeek(d) {
@@ -948,22 +952,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     else if (e.key === 'n') next(false); else if (e.key === 'p') prev();
   });
 
-  function resumeCurrentPlayback() {
-    if (!audio) return Promise.resolve();
-    var current = audio;
-    var resume = (!current.plain && ctx && ctx.state !== 'running')
-      ? ctx.resume().catch(function () {})
-      : Promise.resolve();
-    return resume.then(function () {
-      if (audio !== current || !current.a.paused) return;
-      return current.a.play().catch(function () { say('Tap Play in Safari to resume audio.'); });
-    });
-  }
   if ('mediaSession' in navigator) {
     try {
-      navigator.mediaSession.setActionHandler('play', function () {
-        if (audio) resumeCurrentPlayback(); else togglePlay();
-      });
+      navigator.mediaSession.setActionHandler('play', function () { if (audio) { var rp = (!audio.plain && ctx && ctx.state !== 'running') ? ctx.resume() : null; var pp = audio.a.play(); if (pp && pp.catch) pp.catch(function () {}); if (rp && rp.catch) rp.catch(function () {}); } else togglePlay(); });
       navigator.mediaSession.setActionHandler('pause', function () { if (audio) audio.a.pause(); });
       navigator.mediaSession.setActionHandler('previoustrack', prev);
       navigator.mediaSession.setActionHandler('nexttrack', function () { next(false); });
@@ -972,19 +963,12 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     } catch (e) {}
   }
   document.addEventListener('visibilitychange', function () {
-    /* Do not pause or rebuild the media element when Safari backgrounds the page.
-       If Web Audio was suspended while audio was active, attempt to resume it. */
-    if (ctx && ctx.state === 'suspended' && audio && !audio.a.paused) {
-      ctx.resume().catch(function () {});
-    }
+    /* Do not pause, recreate or reroute the media element on background/foreground transitions.
+       Resume only when Safari returns to the page; background playback must continue natively. */
+    if (!document.hidden && ctx && ctx.state !== 'running' && audio && !audio.a.paused) ctx.resume().catch(function () {});
   });
   window.addEventListener('pageshow', function () {
-    if (ctx && ctx.state === 'suspended' && audio && !audio.a.paused) ctx.resume().catch(function () {});
-  });
-  if (ctx) ctx.addEventListener('statechange', function () {
-    if (ctx.state === 'suspended' && document.hidden && audio && !audio.a.paused) {
-      ctx.resume().catch(function () {});
-    }
+    if (ctx && ctx.state !== 'running' && audio && !audio.a.paused) ctx.resume().catch(function () {});
   });
 
   /* ---------- start ---------- */
