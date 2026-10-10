@@ -470,8 +470,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   function playId(id, autoplay, noHist, plain) {
     var t = tracks.find(function (x) { return x.id === id; });
     if (!t) return;
-    // Stream local files through the prototype's original tape-effects graph.
-    // This avoids decoding entire songs and keeps background playback support.
+    // Stream local files through the existing prototype effects graph; never decode the whole file.
     teardown();
     curId = id; bag = bag.filter(function (x) { return x !== id; });
     var a = new Audio(); a.preload = 'auto';
@@ -495,8 +494,13 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       if (failStreak < tracks.length) setTimeout(function () { if (curId === id) next(true); }, 500); else teardown();
     });
     if (autoplay) {
-      var p = a.play();
-      if (p && p.catch) p.catch(function () { say('Press play to start.'); });
+      var startPlayback = function () {
+        var p = a.play();
+        if (p && p.catch) p.catch(function () { say('Press play to start.'); });
+      };
+      if (!audio.plain && ctx && ctx.state === 'suspended') {
+        ctx.resume().then(startPlayback).catch(startPlayback);
+      } else startPlayback();
     }
     if (!noHist && shuffle) { /* history is pushed by next() */ }
     renderList(); setLabels();
@@ -789,7 +793,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     if (a && rateAcc > 0.05) {
       rateAcc = 0;
       var rate = targetRate(ts / 1000) * (seekDir > 0 ? 3.5 : 1);
-      if (Math.abs(a.playbackRate - rate) > 0.0001) a.playbackRate = rate;
+      if (audio && !audio.plain && Math.abs(a.playbackRate - rate) > 0.0001) a.playbackRate = rate;
+      else if (audio && audio.plain && a.playbackRate !== 1) a.playbackRate = 1;
     }
     if (a && !seeking) ui.seek.value = dur ? Math.round(p * 1000) : 0;
     $('#sNow').textContent = fmt(now); $('#sDur').textContent = fmt(dur);
