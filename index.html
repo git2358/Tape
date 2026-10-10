@@ -413,6 +413,12 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       if (forceCurve || amt !== nodes.satAmt) { nodes.sat.curve = makeCurve(amt); nodes.satAmt = amt; }
     }
     routeAudio();
+    /* iOS Safari can stutter when HTMLMediaElement.playbackRate is rewritten many times per second.
+       Keep the selected speed stable during normal playback; the original tape EQ/saturation/hiss chain remains intact. */
+    if (audio && !audio.plain && !audio.bypass) {
+      var baseRate = tapeOn ? 1 + (+ui.speed.value) / 100 : 1;
+      if (Math.abs(audio.a.playbackRate - baseRate) > 0.001) audio.a.playbackRate = baseRate;
+    }
     if (tapeOn && audio && !audio.a.paused && ctx && ctx.state === 'suspended') ctx.resume().catch(function () {});
     updateChips();
   }
@@ -811,13 +817,15 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     packL.setAttribute('r', rs.toFixed(2)); packR.setAttribute('r', rt.toFixed(2));
     tapeLine.setAttribute('y1', (102 + rs).toFixed(2)); tapeLine.setAttribute('y2', (102 + rt).toFixed(2));
 
-    rateAcc += dt;
-    if (a && rateAcc > 0.05) {
-      rateAcc = 0;
-      var rate = targetRate(ts / 1000) * (seekDir > 0 ? 3.5 : 1);
-      if (audio && !audio.plain && !audio.bypass && Math.abs(a.playbackRate - rate) > 0.001) a.playbackRate = rate;
-      else if (audio && (audio.plain || audio.bypass) && a.playbackRate !== 1) a.playbackRate = 1;
-    }
+    /* Avoid frequent playbackRate writes on iOS: they can cause audible dropouts/stutter.
+       Preserve normal tape speed and the other effects; fast-forward remains temporary. */
+    if (a && audio && !audio.plain && !audio.bypass && seekDir > 0) {
+      var fastRate = (tapeOn ? 1 + (+ui.speed.value) / 100 : 1) * 3.5;
+      if (Math.abs(a.playbackRate - fastRate) > 0.02) a.playbackRate = fastRate;
+    } else if (a && audio && !audio.plain && !audio.bypass) {
+      var steadyRate = tapeOn ? 1 + (+ui.speed.value) / 100 : 1;
+      if (Math.abs(a.playbackRate - steadyRate) > 0.02) a.playbackRate = steadyRate;
+    } else if (a && a.playbackRate !== 1) a.playbackRate = 1;
     if (a && !seeking) ui.seek.value = dur ? Math.round(p * 1000) : 0;
     $('#sNow').textContent = fmt(now); $('#sDur').textContent = fmt(dur);
     $('#vTime').textContent = fmt(now); $('#vRem').textContent = dur ? '-' + fmt(dur - now) : '-0:00';
