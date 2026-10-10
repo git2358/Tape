@@ -289,7 +289,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   /* ---------- state ---------- */
   var tracks = [], curId = null, nextId = 1, shuffle = false, repeat = 'off', tapeOn = true;
   var bag = [], hist = [], audio = null, ctx = null, nodes = {};
-  var duck = 1, seekDir = 0, seekTimer = null, dragId = null, seeking = false, failStreak = 0, loading = null;
+  var duck = 1, seekDir = 0, seekTimer = null, dragId = null, seeking = false, failStreak = 0;
 
   function say(msg) { $('#status').textContent = msg || ''; }
   function fmt(s) { if (!isFinite(s) || s < 0) s = 0; var m = Math.floor(s / 60), r = Math.floor(s % 60); return m + ':' + (r < 10 ? '0' : '') + r; }
@@ -392,76 +392,16 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
   /* ---------- playback ---------- */
   function teardown() {
-    loading = null;
     if (!audio) return;
-    if (audio.a.dispose) audio.a.dispose();
-    else {
-      try { audio.a.pause(); audio.a.removeAttribute('src'); audio.a.load(); } catch (e) {}
-      try { if (audio.node) audio.node.disconnect(); } catch (e) {}
-    }
+    try { audio.a.pause(); audio.a.removeAttribute('src'); audio.a.load(); } catch (e) {}
+    try { if (audio.node) audio.node.disconnect(); } catch (e) {}
     audio = null;
-  }
-
-  /* Plays a decoded buffer through the tape chain. Mimics the parts of an audio element the page uses. */
-  function BufferPlayer(buffer) {
-    var self = this, node = null, pos = 0, lastT = 0, rate = 1, paused = true, ended = false, L = {};
-    function sync() { if (!paused) { var t = ctx.currentTime; pos += (t - lastT) * rate; lastT = t; } }
-    function stopNode() { var n = node; node = null; if (n) { n.onended = null; try { n.stop(); } catch (e) {} try { n.disconnect(); } catch (e) {} } }
-    function emit(name) { (L[name] || []).slice().forEach(function (f) { f(); }); }
-    function start() {
-      stopNode();
-      var n = ctx.createBufferSource(); n.buffer = buffer; n.playbackRate.value = rate; n.connect(nodes.input);
-      node = n; lastT = ctx.currentTime; n.start(0, Math.min(pos, buffer.duration - 0.001));
-      n.onended = function () { if (node !== n) return; node = null; paused = true; ended = true; pos = buffer.duration; emit('ended'); };
-    }
-    Object.defineProperties(self, {
-      duration: { get: function () { return buffer.duration; } },
-      paused: { get: function () { return paused; } },
-      ended: { get: function () { return ended; } },
-      playbackRate: { get: function () { return rate; }, set: function (v) { sync(); rate = v; if (node) node.playbackRate.setTargetAtTime(v, ctx.currentTime, 0.02); } },
-      currentTime: {
-        get: function () { sync(); return Math.min(pos, buffer.duration); },
-        set: function (v) { sync(); pos = Math.max(0, Math.min(v, buffer.duration)); if (pos < buffer.duration) ended = false; if (!paused) start(); }
-      }
-    });
-    self.play = function () {
-      if (!paused) return Promise.resolve();
-      if (ended || pos >= buffer.duration - 0.01) pos = 0;
-      ended = false; paused = false; start(); emit('playing'); return Promise.resolve();
-    };
-    self.pause = function () { if (paused) return; sync(); paused = true; stopNode(); };
-    self.addEventListener = function (name, f) { (L[name] = L[name] || []).push(f); };
-    self.dispose = function () { paused = true; stopNode(); L = {}; };
-  }
-  function loadBuffer(t, id, autoplay) {
-    initAudio(); if (ctx.state === 'suspended') ctx.resume();
-    loading = id; say('Loading ' + t.title + '…');
-    t.file.arrayBuffer().then(function (ab) {
-      return new Promise(function (res, rej) { var p = ctx.decodeAudioData(ab, res, rej); if (p && p.catch) p.catch(rej); });
-    }).then(function (buf) {
-      if (loading !== id) return;
-      loading = null;
-      var bp = new BufferPlayer(buf);
-      t.dur = buf.duration;
-      audio = { a: bp, node: null, plain: false, id: id };
-      bp.addEventListener('ended', function () { next(true); });
-      bp.addEventListener('playing', function () { failStreak = 0; });
-      say('');
-      if (autoplay) bp.play();
-      renderList(); setLabels();
-    }).catch(function () {
-      if (loading !== id) return;
-      loading = null;
-      say('Could not decode ' + t.title + '. Playing it normally, without the tape effect.');
-      t.plain = true; playId(id, autoplay, true, true);
-    });
   }
   function playId(id, autoplay, noHist, plain) {
     var t = tracks.find(function (x) { return x.id === id; });
     if (!t) return;
     teardown();
     curId = id; bag = bag.filter(function (x) { return x !== id; });
-    if (t.file && !plain) { loadBuffer(t, id, autoplay); renderList(); setLabels(); return; }
     var a = new Audio(); a.preload = 'auto';
     a.preservesPitch = false; a.mozPreservesPitch = false; a.webkitPreservesPitch = false;
     var remote = /^https?:/i.test(t.src);
@@ -517,7 +457,6 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   }
   function togglePlay() {
     initAudio(); if (ctx.state === 'suspended') ctx.resume();
-    if (loading != null) return;
     if (!audio) {
       if (!tracks.length) { say('Add some songs first.'); return; }
       var id = shuffle ? tracks[Math.floor(Math.random() * tracks.length)].id : tracks[0].id;
@@ -576,7 +515,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
         fr.onloadend = function () { pending--; };
         fr.readAsText(f);
       } else if ((f.type && f.type.indexOf('audio') === 0) || /\.(mp3|m4a|aac|flac|ogg|oga|opus|wav|weba|webm)$/i.test(f.name)) {
-        addTrack(URL.createObjectURL(f), cleanName(f.name), { local: true, file: f }); n++;
+        addTrack(URL.createObjectURL(f), cleanName(f.name), { local: true }); n++;
       }
     });
     if (n) say('Added ' + n + (n === 1 ? ' song.' : ' songs.'));
@@ -772,7 +711,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     v.setUint16(32, ch * 2, true); v.setUint16(34, 16, true); w(36, 'data'); v.setUint32(40, len * ch * 2, true);
     var o = 44, d = []; for (var c = 0; c < ch; c++) d.push(buf.getChannelData(c));
     for (var i = 0; i < len; i++) for (var k = 0; k < ch; k++) { var s = Math.max(-1, Math.min(1, d[k][i])); v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true); o += 2; }
-    return new Blob([ab], { type: 'audio/wav' });
+    return URL.createObjectURL(new Blob([ab], { type: 'audio/wav' }));
   }
   function makeDemo() {
     var OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
@@ -819,7 +758,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
         }
       }
     }
-    return oc.startRendering().then(function (buf) { var b = wavUrl(buf); return { url: URL.createObjectURL(b), dur: buf.duration, blob: b }; });
+    return oc.startRendering().then(function (buf) { return { url: wavUrl(buf), dur: buf.duration }; });
   }
 
   /* ---------- events ---------- */
@@ -866,7 +805,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   requestAnimationFrame(frame);
   say('Rendering a demo tape…');
   makeDemo().then(function (d) {
-    var t = addTrack(d.url, 'Demo tape · Sine City', { local: true, file: d.blob }); t.dur = d.dur;
+    var t = addTrack(d.url, 'Demo tape · Sine City', { local: true }); t.dur = d.dur;
     renderList(); say('Demo tape ready. Press play, then add your own songs.');
   }).catch(function () { say('Add songs to begin.'); });
 })();
