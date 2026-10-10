@@ -470,6 +470,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   function playId(id, autoplay, noHist, plain) {
     var t = tracks.find(function (x) { return x.id === id; });
     if (!t) return;
+    // Local files and the generated demo use native media playback for stability,
+    // avoiding full-file decoding and keeping iOS background playback available.
+    if (t.local) plain = true;
     teardown();
     curId = id; bag = bag.filter(function (x) { return x !== id; });
     var a = new Audio(); a.preload = 'auto';
@@ -483,7 +486,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     if (audio.plain) a.volume = Math.max(0, Math.min(1, muted ? 0 : +ui.vol.value * duck));
     else a.volume = 1;
     a.addEventListener('loadedmetadata', function () { if (isFinite(a.duration) && a.duration > 0) { t.dur = a.duration; renderList(); } });
-    a.addEventListener('playing', function () { failStreak = 0; });
+    a.addEventListener('playing', function () { failStreak = 0; if ('mediaSession' in navigator) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} } });
+    a.addEventListener('pause', function () { if ('mediaSession' in navigator && (!audio || audio.a === a)) { try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {} } });
     a.addEventListener('ended', function () { next(true); });
     a.addEventListener('error', function () {
       if (!audio || audio.a !== a) return;
@@ -654,6 +658,12 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var m = $('#marq'); m.classList.remove('run');
     requestAnimationFrame(function () { if (!calm && $('#vTitle').scrollWidth > m.clientWidth + 2) m.classList.add('run'); });
     document.title = t ? t.title + ' · Cassette Walkman' : 'Cassette Walkman';
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = t && 'MediaMetadata' in window ? new MediaMetadata({ title: t.title, artist: 'Cassette Walkman', album: 'Local playlist' }) : null;
+        navigator.mediaSession.playbackState = audio && !audio.a.paused ? 'playing' : 'paused';
+      } catch (e) {}
+    }
   }
   function updateChips() {
     $('#cShuf').classList.toggle('on', shuffle);
@@ -902,6 +912,20 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     else if (e.key === 'ArrowRight' && audio) audio.a.currentTime += 5;
     else if (e.key === 'ArrowLeft' && audio) audio.a.currentTime = Math.max(0, audio.a.currentTime - 5);
     else if (e.key === 'n') next(false); else if (e.key === 'p') prev();
+  });
+
+  if ('mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.setActionHandler('play', function () { if (audio) { if (ctx && ctx.state === 'suspended') ctx.resume(); audio.a.play().catch(function () {}); } else togglePlay(); });
+      navigator.mediaSession.setActionHandler('pause', function () { if (audio) audio.a.pause(); });
+      navigator.mediaSession.setActionHandler('previoustrack', prev);
+      navigator.mediaSession.setActionHandler('nexttrack', function () { next(false); });
+      navigator.mediaSession.setActionHandler('seekbackward', function (d) { if (audio) audio.a.currentTime = Math.max(0, audio.a.currentTime - (d.seekOffset || 10)); });
+      navigator.mediaSession.setActionHandler('seekforward', function (d) { if (audio) audio.a.currentTime = Math.min(isFinite(audio.a.duration) ? audio.a.duration : Infinity, audio.a.currentTime + (d.seekOffset || 10)); });
+    } catch (e) {}
+  }
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden && ctx && ctx.state === 'suspended' && audio && !audio.a.paused) ctx.resume().catch(function () {});
   });
 
   /* ---------- start ---------- */
