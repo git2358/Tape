@@ -948,9 +948,22 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     else if (e.key === 'n') next(false); else if (e.key === 'p') prev();
   });
 
+  function resumeCurrentPlayback() {
+    if (!audio) return Promise.resolve();
+    var current = audio;
+    var resume = (!current.plain && ctx && ctx.state !== 'running')
+      ? ctx.resume().catch(function () {})
+      : Promise.resolve();
+    return resume.then(function () {
+      if (audio !== current || !current.a.paused) return;
+      return current.a.play().catch(function () { say('Tap Play in Safari to resume audio.'); });
+    });
+  }
   if ('mediaSession' in navigator) {
     try {
-      navigator.mediaSession.setActionHandler('play', function () { if (audio) { if (ctx && ctx.state === 'suspended') ctx.resume(); audio.a.play().catch(function () {}); } else togglePlay(); });
+      navigator.mediaSession.setActionHandler('play', function () {
+        if (audio) resumeCurrentPlayback(); else togglePlay();
+      });
       navigator.mediaSession.setActionHandler('pause', function () { if (audio) audio.a.pause(); });
       navigator.mediaSession.setActionHandler('previoustrack', prev);
       navigator.mediaSession.setActionHandler('nexttrack', function () { next(false); });
@@ -959,7 +972,19 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     } catch (e) {}
   }
   document.addEventListener('visibilitychange', function () {
-    if (!document.hidden && ctx && ctx.state === 'suspended' && audio && !audio.a.paused) ctx.resume().catch(function () {});
+    /* Do not pause or rebuild the media element when Safari backgrounds the page.
+       If Web Audio was suspended while audio was active, attempt to resume it. */
+    if (ctx && ctx.state === 'suspended' && audio && !audio.a.paused) {
+      ctx.resume().catch(function () {});
+    }
+  });
+  window.addEventListener('pageshow', function () {
+    if (ctx && ctx.state === 'suspended' && audio && !audio.a.paused) ctx.resume().catch(function () {});
+  });
+  if (ctx) ctx.addEventListener('statechange', function () {
+    if (ctx.state === 'suspended' && document.hidden && audio && !audio.a.paused) {
+      ctx.resume().catch(function () {});
+    }
   });
 
   /* ---------- start ---------- */
