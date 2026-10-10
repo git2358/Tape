@@ -375,7 +375,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
         if (audio.a) audio.a.volume = v;
       } else {
         if (audio.fxA) audio.fxA.volume = 1;
-        if (audio.bgA) audio.bgA.volume = audio.a === audio.bgA ? v : (audio.bgA.paused ? 0 : 0.001);
+        if (audio.bgA) { audio.bgA.volume = audio.a === audio.bgA ? v : 0; audio.bgA.muted = audio.a !== audio.bgA; }
       }
     }
     var mb = $('#bMute'); if (mb) { mb.textContent = muted ? 'Unmute' : 'Mute'; mb.classList.toggle('go', muted); }
@@ -392,7 +392,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
         audio.bypass = true;
       }
       if (audio.fxA) audio.fxA.volume = 1;
-      if (audio.bgA) audio.bgA.volume = audio.a === audio.bgA ? Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck)) : (audio.bgA.paused ? 0 : 0.001);
+      if (audio.bgA) { audio.bgA.volume = audio.a === audio.bgA ? Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck)) : 0; audio.bgA.muted = audio.a !== audio.bgA; }
     } catch (e) {
       audio.bypass = true;
       if (audio.a) audio.a.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
@@ -462,7 +462,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
        element playing quietly while visible, ready to take over without starting a new
        playback session after the page has lost foreground activation. */
     if (useEffects && needsNativeBackgroundFallback) {
-      bgA = new Audio(); bgA.preload = 'auto'; bgA.playsInline = true;
+      bgA = new Audio(); bgA.preload = 'auto'; bgA.playsInline = true; bgA.muted = true; bgA.volume = 0;
       bgA.setAttribute('playsinline', ''); bgA.setAttribute('webkit-playsinline', '');
       bgA.preservesPitch = false; bgA.mozPreservesPitch = false; bgA.webkitPreservesPitch = false;
       bgA.src = t.src; bgA.volume = 0.001;
@@ -489,15 +489,15 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     }
     if (autoplay) {
       if (bgA && document.hidden) {
-        audio.a = bgA; bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
+        audio.a = bgA; bgA.muted = false; bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
         try { a.pause(); } catch (e) {}
         var hiddenPlay = bgA.play(); if (hiddenPlay && hiddenPlay.catch) hiddenPlay.catch(function () { say('Return to Safari and press Play to resume.'); });
       } else {
         var resumePromise = (useEffects && ctx && ctx.state !== 'running') ? ctx.resume() : Promise.resolve();
         var playPromise = a.play();
-        if (bgA) { bgA.currentTime = 0; bgA.playbackRate = a.playbackRate; var standbyPlay = bgA.play(); if (standbyPlay && standbyPlay.catch) standbyPlay.catch(function () {}); }
+        if (bgA) { bgA.currentTime = 0; bgA.playbackRate = a.playbackRate; bgA.muted = true; bgA.volume = 0; var standbyPlay = bgA.play(); if (standbyPlay && standbyPlay.catch) standbyPlay.catch(function () {}); }
         if (playPromise && playPromise.catch) playPromise.catch(function () {
-          if (audio && audio.id === id && bgA) { audio.a = bgA; bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck)); bgA.play().catch(function () {}); say('Using native playback; tape processing will return when available.'); }
+          if (audio && audio.id === id && bgA) { audio.a = bgA; bgA.muted = false; bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck)); bgA.play().catch(function () {}); say('Using native playback; tape processing will return when available.'); }
           else say('Press play to start.');
         });
         if (resumePromise && resumePromise.catch) resumePromise.catch(function () {});
@@ -543,7 +543,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     }
     if (audio.a.paused) {
       if (audio.bgA && document.hidden) {
-        audio.a = audio.bgA; audio.bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
+        audio.a = audio.bgA; audio.bgA.muted = false; audio.bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
         audio.bgA.play().catch(function () { say('Return to Safari and press Play to resume.'); });
       } else if (audio.bgA && audio.fxA) {
         var currentPos = audio.a === audio.bgA ? audio.bgA.currentTime : audio.fxA.currentTime;
@@ -946,29 +946,49 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   });
 
   function switchToBackgroundAudio() {
-    if (!audio || !audio.bgA || audio.plain || audio.a === audio.bgA || audio.a.paused || !audio.fxA) return;
-    var current = audio;
-    try {
-      current.bgA.currentTime = current.fxA.currentTime;
-      current.bgA.playbackRate = current.fxA.playbackRate;
-    } catch (e) {}
-    current.a = current.bgA;
-    current.bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
-    var p = current.bgA.play(); if (p && p.catch) p.catch(function () { say('Background playback could not resume; return to Safari and press Play.'); });
-    try { current.fxA.pause(); } catch (e) {}
+    if (!audio || !audio.bgA || audio.plain || !audio.fxA) return;
+    var current = audio, fx = current.fxA, bg = current.bgA;
+    if (current.a === bg) {
+      bg.muted = false;
+      bg.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
+      return;
+    }
+    if (fx.paused) return;
+    try { bg.currentTime = fx.currentTime; bg.playbackRate = fx.playbackRate; } catch (e) {}
+    current.a = bg;
+    bg.muted = false;
+    bg.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
+    var p = bg.play();
+    if (p && p.then) {
+      p.then(function () {
+        if (audio !== current || !document.hidden || current.a !== bg) return;
+        try { fx.pause(); } catch (e) {}
+      }).catch(function () {
+        if (audio !== current) return;
+        try { fx.pause(); } catch (e) {}
+        say('Background playback could not start; return to Safari and press Play.');
+      });
+    } else {
+      try { fx.pause(); } catch (e) {}
+    }
     if ('mediaSession' in navigator) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} }
   }
   function switchToEffectsAudio() {
-    if (!audio || !audio.bgA || audio.plain || audio.a !== audio.bgA || audio.bgA.paused || !audio.fxA) return;
+    if (!audio || !audio.bgA || audio.plain || audio.a !== audio.bgA || !audio.fxA) return;
     var current = audio, bg = current.bgA, fx = current.fxA;
+    if (bg.paused) return;
     try { fx.currentTime = bg.currentTime; fx.playbackRate = bg.playbackRate; } catch (e) {}
     var resume = ctx && ctx.state !== 'running' ? ctx.resume() : Promise.resolve();
     resume.then(function () {
-      if (audio !== current || document.hidden || bg.paused) return;
+      if (audio !== current || document.hidden || current.a !== bg) return;
       var p = fx.play();
       if (p && p.then) p.then(function () {
         if (audio !== current || document.hidden || !ctx || ctx.state !== 'running') { try { fx.pause(); } catch (e) {} return; }
-        current.a = fx; bg.volume = 0.001;
+        current.a = fx;
+        /* Never leave the native fallback audibly running under the processed track. */
+        bg.muted = true;
+        bg.volume = 0;
+        try { bg.pause(); } catch (e) {}
         if ('mediaSession' in navigator) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} }
       }).catch(function () {});
     }).catch(function () {});
@@ -978,7 +998,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       navigator.mediaSession.setActionHandler('play', function () {
         if (!audio) { togglePlay(); return; }
         if (audio.bgA && document.hidden) {
-          audio.a = audio.bgA; audio.bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
+          audio.a = audio.bgA; audio.bgA.muted = false; audio.bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
           audio.bgA.play().catch(function () {});
         } else togglePlay();
       });
