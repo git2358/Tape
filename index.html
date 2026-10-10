@@ -953,22 +953,32 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       bg.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
       return;
     }
-    if (fx.paused) return;
-    try { bg.currentTime = fx.currentTime; bg.playbackRate = fx.playbackRate; } catch (e) {}
+    /* Safari may pause the effects element as the page becomes hidden, before this
+       handler runs. Do not abort the handover in that case: the native element is
+       the background-safe fallback and must be allowed to take over. */
+    try {
+      var position = isFinite(fx.currentTime) ? fx.currentTime : 0;
+      if (isFinite(bg.duration) && bg.duration > 0) position = Math.min(position, Math.max(0, bg.duration - 0.1));
+      bg.currentTime = position;
+      bg.playbackRate = fx.playbackRate || 1;
+    } catch (e) {}
     current.a = bg;
     bg.muted = false;
     bg.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
-    var p = bg.play();
+    var p;
+    try { p = bg.play(); } catch (e) { p = null; }
     if (p && p.then) {
       p.then(function () {
         if (audio !== current || !document.hidden || current.a !== bg) return;
+        /* Pause the processed source only after native playback has actually started. */
         try { fx.pause(); } catch (e) {}
       }).catch(function () {
         if (audio !== current) return;
-        try { fx.pause(); } catch (e) {}
-        say('Background playback could not start; return to Safari and press Play.');
+        /* Keep the processed source alive if Safari rejects the native handover. */
+        if (!fx.paused && ctx && ctx.state === 'suspended') ctx.resume().catch(function () {});
+        say('iOS blocked background handover. Return to Safari and press Play.');
       });
-    } else {
+    } else if (p === undefined) {
       try { fx.pause(); } catch (e) {}
     }
     if ('mediaSession' in navigator) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} }
@@ -1015,8 +1025,12 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     } catch (e) {}
   }
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden) switchToBackgroundAudio();
-    else switchToEffectsAudio();
+    if (document.hidden) {
+      switchToBackgroundAudio();
+      /* A second attempt on the next task covers Safari pausing the effects source
+         during the same visibility transition. The handover function is idempotent. */
+      setTimeout(function () { if (document.hidden) switchToBackgroundAudio(); }, 120);
+    } else switchToEffectsAudio();
   });
   window.addEventListener('pageshow', function () { if (!document.hidden) switchToEffectsAudio(); });
 
