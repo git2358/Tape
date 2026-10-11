@@ -91,6 +91,7 @@ canvas#viz { display: block; width: 100%; height: 160px; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 20px; margin-top: 6px; }
 .chips span { color: var(--vfd-dim); text-shadow: none; letter-spacing: .06em; }
 .chips span.on { color: var(--vfd); text-shadow: 0 0 6px color-mix(in srgb, var(--vfd) 70%, transparent); }
+.chips span.off { color: var(--ink-dim); text-shadow: none; }
 
 /* Cassette */
 .bay { display: grid; gap: 10px; }
@@ -199,7 +200,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
           <button class="mode viz-mode" data-viz="dual" aria-pressed="false">Dual trace</button>
           <button class="mode viz-mode" data-viz="meter" aria-pressed="false">Peak meter</button>
         </div>
-        <div class="chips"><span id="cShuf">SHUFFLE</span><span id="cRep">REPEAT</span><span id="cTape">TAPE FX</span><span id="cSpd">+3.0%</span><span id="cMode">STOP</span></div>
+        <div class="chips"><span id="cShuf">SHUFFLE</span><span id="cRep">REPEAT</span><span id="cTape">TAPE FX</span><span id="cLimiter">LIMITER ON</span><span id="cSpd">+3.0%</span><span id="cMode">STOP</span></div>
       </div>
     </section>
 
@@ -362,7 +363,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     for (var i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
     var ns = ctx.createBufferSource(); ns.buffer = nb; ns.loop = true;
     var nh = biq('highpass', 3500, 0.7), nl = biq('lowpass', 12000, 0.7), hissG = ctx.createGain(); hissG.gain.value = 0;
-    ns.connect(nh); nh.connect(nl); nl.connect(hissG); hissG.connect(vol); ns.start();
+    ns.connect(nh); nh.connect(nl); nl.connect(hissG); hissG.connect(comp); ns.start();
 
     var an = ctx.createAnalyser(); an.fftSize = 2048; an.smoothingTimeConstant = 0.72;
     var split = ctx.createChannelSplitter(2), aL = ctx.createAnalyser(), aR = ctx.createAnalyser();
@@ -710,6 +711,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     $('#cRep').textContent = repeat === 'one' ? 'REPEAT 1' : 'REPEAT';
     $('#cTape').classList.toggle('on', tapeOn && !(audio && (audio.plain || audio.bypass)));
     $('#mLimiter').classList.toggle('go', limiterOn);
+    $('#cLimiter').textContent = limiterOn ? 'LIMITER ON' : 'LIMITER OFF';
+    $('#cLimiter').classList.toggle('on', limiterOn);
+    $('#cLimiter').classList.toggle('off', !limiterOn);
     var lr = $('#limiterReadout');
     if (lr) { var reduction = nodes.comp ? nodes.comp.reduction : 0; lr.textContent = limiterOn ? 'LIMITER ON · ' + (reduction < -0.5 ? reduction.toFixed(1) + ' dB reduction' : 'standing by') : 'LIMITER OFF'; }
     $('#cSpd').classList.toggle('on', tapeOn);
