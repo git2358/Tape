@@ -255,7 +255,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
     <section class="panel tone" aria-label="Tape sound">
       <div class="tone-head"><h2>Tape sound</h2><span class="label">Varispeed + EQ + saturation</span></div>
-      <div class="modes"><button class="mode" id="mLimiter" aria-pressed="true"><i></i>Auto volume limiter</button><button class="btn reset" type="button" id="resetAll">Reset all sliders</button></div>
+      <div class="modes"><button class="mode" id="mLimiter" aria-pressed="true"><i></i>Auto volume limiter ON</button><span id="limiterReadout" class="label" aria-live="polite">LIMITER ON · standing by</span><button class="btn reset" type="button" id="resetAll">Reset all sliders</button></div>
       <div class="faders">
         <label class="fader"><span class="label">Speed</span><input type="range" id="speed" min="0" max="6" step="0.1" value="3"><output id="oSpeed"></output><button class="btn reset" type="button" data-reset="speed" aria-label="Reset speed">Reset</button></label>
         <label class="fader"><span class="label">Warmth</span><input type="range" id="warm" min="0" max="6" step="0.5" value="2"><output id="oWarm"></output><button class="btn reset" type="button" data-reset="warm" aria-label="Reset warmth">Reset</button></label>
@@ -354,8 +354,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var sat = ctx.createWaveShaper(); sat.oversample = '2x'; sat.curve = makeCurve(0);
     var comp = ctx.createDynamicsCompressor();
     comp.threshold.value = limiterOn ? -6 : -18; comp.knee.value = limiterOn ? 0 : 20; comp.ratio.value = limiterOn ? 20 : 2.5; comp.attack.value = limiterOn ? 0.003 : 0.01; comp.release.value = limiterOn ? 0.12 : 0.25;
+    var safety = ctx.createDynamicsCompressor(); safety.threshold.value = -1.5; safety.knee.value = 0; safety.ratio.value = 20; safety.attack.value = 0.001; safety.release.value = 0.08;
     var vol = ctx.createGain();
-    input.connect(hp); hp.connect(warm); warm.connect(pres); pres.connect(lp1); lp1.connect(lp2); lp2.connect(sat); sat.connect(comp); comp.connect(vol);
+    input.connect(hp); hp.connect(warm); warm.connect(pres); pres.connect(lp1); lp1.connect(lp2); lp2.connect(sat); sat.connect(comp); comp.connect(safety); safety.connect(vol);
 
     var nb = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), nd = nb.getChannelData(0);
     for (var i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
@@ -367,7 +368,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var split = ctx.createChannelSplitter(2), aL = ctx.createAnalyser(), aR = ctx.createAnalyser();
     aL.fftSize = 512; aR.fftSize = 512; aL.smoothingTimeConstant = 0.6; aR.smoothingTimeConstant = 0.6;
     vol.connect(an); vol.connect(split); split.connect(aL, 0); split.connect(aR, 1); vol.connect(ctx.destination);
-    nodes = { input: input, warm: warm, pres: pres, lp1: lp1, lp2: lp2, sat: sat, comp: comp, hiss: hissG, vol: vol, an: an, aL: aL, aR: aR };
+    nodes = { input: input, warm: warm, pres: pres, lp1: lp1, lp2: lp2, sat: sat, comp: comp, safety: safety, hiss: hissG, vol: vol, an: an, aL: aL, aR: aR };
     applyTape(true); setVol();
   }
   function setVol() {
@@ -415,6 +416,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     $('#oHiss').textContent = v('hiss');
     $('#mTape').setAttribute('aria-pressed', String(tapeOn));
     $('#mLimiter').setAttribute('aria-pressed', String(limiterOn));
+    $('#mLimiter').textContent = limiterOn ? 'Auto volume limiter ON' : 'Auto volume limiter OFF';
     if (nodes.comp) { nodes.comp.threshold.setTargetAtTime(limiterOn ? -6 : -18, ctx.currentTime, 0.03); nodes.comp.knee.setTargetAtTime(limiterOn ? 0 : 20, ctx.currentTime, 0.03); nodes.comp.ratio.setTargetAtTime(limiterOn ? 20 : 2.5, ctx.currentTime, 0.03); nodes.comp.attack.setTargetAtTime(limiterOn ? 0.003 : 0.01, ctx.currentTime, 0.03); nodes.comp.release.setTargetAtTime(limiterOn ? 0.12 : 0.25, ctx.currentTime, 0.03); }
     if (nodes.warm) {
       var t = ctx.currentTime, on = tapeOn;
@@ -707,6 +709,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     $('#cRep').classList.toggle('on', repeat !== 'off');
     $('#cRep').textContent = repeat === 'one' ? 'REPEAT 1' : 'REPEAT';
     $('#cTape').classList.toggle('on', tapeOn && !(audio && (audio.plain || audio.bypass)));
+    $('#mLimiter').classList.toggle('go', limiterOn);
+    var lr = $('#limiterReadout');
+    if (lr) { var reduction = nodes.comp ? nodes.comp.reduction : 0; lr.textContent = limiterOn ? 'LIMITER ON · ' + (reduction < -0.5 ? reduction.toFixed(1) + ' dB reduction' : 'standing by') : 'LIMITER OFF'; }
     $('#cSpd').classList.toggle('on', tapeOn);
     $('#cSpd').textContent = (tapeOn ? '+' + (+ui.speed.value).toFixed(1) : '+0.0') + '%';
     $('#mShuf').setAttribute('aria-pressed', String(shuffle));
