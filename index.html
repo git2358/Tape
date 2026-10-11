@@ -392,11 +392,12 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       audio.node.disconnect();
       if (tapeOn) {
         audio.node.connect(nodes.input);
-        audio.bypass = false;
       } else {
-        audio.node.connect(ctx.destination);
-        audio.bypass = true;
+        /* Bypass tape coloration, but keep the limiter, safety stage,
+           output gain and analyser in the signal path. */
+        audio.node.connect(nodes.comp);
       }
+      audio.bypass = false;
       if (audio.fxA) audio.fxA.volume = 1;
       if (audio.bgA) { audio.bgA.volume = audio.a === audio.bgA ? Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck)) : 0; audio.bgA.muted = audio.a !== audio.bgA; }
     } catch (e) {
