@@ -143,7 +143,7 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 22px; border-radius: 
 .tone h2, .playlist h2 { margin: 0; font-family: var(--font-ui); font-weight: 600; font-size: 16px; letter-spacing: .16em; text-transform: uppercase; }
 .tone-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
 .faders { display: grid; gap: 2px 18px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
-.fader { display: grid; grid-template-columns: 78px minmax(0, 1fr) 54px; gap: 8px; align-items: center; }
+.fader { display: grid; grid-template-columns: 78px minmax(0, 1fr) 54px auto; gap: 8px; align-items: center; }
 .fader output { font-family: var(--font-vfd); font-size: 19px; color: var(--vfd); text-align: right; font-variant-numeric: tabular-nums; }
 .hint { color: var(--ink-dim); font-size: 12.5px; margin: 8px 0 0; max-width: 62ch; }
 
@@ -371,6 +371,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     applyTape(true); setVol();
   }
   function setVol() {
+    $('#oVol').textContent = Math.round((+ui.vol.value) * 100) + '%';
     var v = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
     if (nodes.vol && ctx) nodes.vol.gain.setTargetAtTime(muted ? 0 : (+ui.vol.value) * duck, ctx.currentTime, 0.03);
     if (audio) {
