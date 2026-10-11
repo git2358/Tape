@@ -129,7 +129,9 @@ canvas#viz { display: block; width: 100%; height: 160px; }
 .mode[aria-pressed="true"] { color: var(--ink); border-color: #6a4430; }
 
 .seek { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; font-family: var(--font-vfd); font-size: 20px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
-.vol { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px; align-items: center; }
+.vol { display: grid; grid-template-columns: auto minmax(0, 1fr) 44px auto; gap: 10px; align-items: center; }
+.vol output { font-family: var(--font-vfd); font-size: 19px; color: var(--vfd); text-align: right; font-variant-numeric: tabular-nums; }
+.fader .reset, .vol .reset { padding: 3px 6px; font-size: 10px; letter-spacing: .06em; }
 
 input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 26px; background: transparent; margin: 0; }
 input[type=range]::-webkit-slider-runnable-track { height: 5px; border-radius: 3px; background: #0a0908; box-shadow: inset 0 1px 2px #000, 0 1px 0 #ffffff14; }
@@ -243,7 +245,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
         <button class="key" id="kNext" aria-label="Next track"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5l10.5 7L4 19z"/></svg></button>
       </div>
       <div class="seek"><span id="sNow">0:00</span><input type="range" id="seek" min="0" max="1000" value="0" aria-label="Seek"><span id="sDur">0:00</span></div>
-      <div class="vol"><span class="label">Volume</span><input type="range" id="vol" min="0" max="1" step="0.01" value="0.8" aria-label="Volume"></div>
+      <div class="vol"><span class="label">Volume</span><input type="range" id="vol" min="0" max="1" step="0.01" value="0.8" aria-label="Volume"><output id="oVol">80%</output><button class="btn reset" type="button" data-reset="vol" aria-label="Reset volume">Reset</button></div>
       <div class="modes">
         <button class="mode" id="mShuf" aria-pressed="false"><i></i>Shuffle</button>
         <button class="mode" id="mRep" aria-pressed="false"><i></i><span id="mRepT">Repeat off</span></button>
@@ -253,14 +255,15 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
     <section class="panel tone" aria-label="Tape sound">
       <div class="tone-head"><h2>Tape sound</h2><span class="label">Varispeed + EQ + saturation</span></div>
+      <div class="modes"><button class="mode" id="mLimiter" aria-pressed="true"><i></i>Auto volume limiter</button><button class="btn reset" type="button" id="resetAll">Reset all sliders</button></div>
       <div class="faders">
-        <label class="fader"><span class="label">Speed</span><input type="range" id="speed" min="0" max="6" step="0.1" value="3"><output id="oSpeed"></output></label>
-        <label class="fader"><span class="label">Warmth</span><input type="range" id="warm" min="0" max="6" step="0.5" value="2"><output id="oWarm"></output></label>
-        <label class="fader"><span class="label">Clarity</span><input type="range" id="clar" min="0" max="6" step="0.5" value="2"><output id="oClar"></output></label>
-        <label class="fader"><span class="label">Hi cut</span><input type="range" id="cut" min="8" max="20" step="0.5" value="14.5"><output id="oCut"></output></label>
-        <label class="fader"><span class="label">Saturate</span><input type="range" id="sat" min="0" max="100" step="1" value="25"><output id="oSat"></output></label>
-        <label class="fader"><span class="label">Wow</span><input type="range" id="wow" min="0" max="100" step="1" value="30"><output id="oWow"></output></label>
-        <label class="fader"><span class="label">Hiss</span><input type="range" id="hiss" min="0" max="100" step="1" value="10"><output id="oHiss"></output></label>
+        <label class="fader"><span class="label">Speed</span><input type="range" id="speed" min="0" max="6" step="0.1" value="3"><output id="oSpeed"></output><button class="btn reset" type="button" data-reset="speed" aria-label="Reset speed">Reset</button></label>
+        <label class="fader"><span class="label">Warmth</span><input type="range" id="warm" min="0" max="6" step="0.5" value="2"><output id="oWarm"></output><button class="btn reset" type="button" data-reset="warm" aria-label="Reset warmth">Reset</button></label>
+        <label class="fader"><span class="label">Clarity</span><input type="range" id="clar" min="0" max="6" step="0.5" value="2"><output id="oClar"></output><button class="btn reset" type="button" data-reset="clar" aria-label="Reset clarity">Reset</button></label>
+        <label class="fader"><span class="label">Hi cut</span><input type="range" id="cut" min="8" max="20" step="0.5" value="14.5"><output id="oCut"></output><button class="btn reset" type="button" data-reset="cut" aria-label="Reset hi cut">Reset</button></label>
+        <label class="fader"><span class="label">Saturate</span><input type="range" id="sat" min="0" max="100" step="1" value="25"><output id="oSat"></output><button class="btn reset" type="button" data-reset="sat" aria-label="Reset saturate">Reset</button></label>
+        <label class="fader"><span class="label">Wow</span><input type="range" id="wow" min="0" max="100" step="1" value="30"><output id="oWow"></output><button class="btn reset" type="button" data-reset="wow" aria-label="Reset wow">Reset</button></label>
+        <label class="fader"><span class="label">Hiss</span><input type="range" id="hiss" min="0" max="100" step="1" value="10"><output id="oHiss"></output><button class="btn reset" type="button" data-reset="hiss" aria-label="Reset hiss">Reset</button></label>
       </div>
       <p class="hint">Speed raises tempo and pitch together, like a tape deck running fast. Warmth lifts around 150 Hz, clarity lifts around 3 kHz, and hi cut rolls off the digital sizzle.</p>
     </section>
@@ -298,7 +301,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
   /* ---------- state ---------- */
   var tracks = [], curId = null, nextId = 1, shuffle = false, repeat = 'off', tapeOn = true;
-  var bag = [], hist = [], audio = null, ctx = null, nodes = {}, vizMode = 'spectrum', muted = false;
+  var bag = [], hist = [], audio = null, ctx = null, nodes = {}, vizMode = 'spectrum', muted = false, limiterOn = true;
   var needsNativeBackgroundFallback = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var duck = 1, seekDir = 0, seekTimer = null, dragId = null, seeking = false, failStreak = 0;
 
@@ -311,7 +314,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   /* ---------- settings ---------- */
   function saveSettings() {
     try {
-      var o = { tapeOn: tapeOn, shuffle: shuffle, repeat: repeat, muted: muted, vizMode: vizMode };
+      var o = { tapeOn: tapeOn, shuffle: shuffle, repeat: repeat, muted: muted, vizMode: vizMode, limiterOn: limiterOn };
       Object.keys(ui).forEach(function (k) { if (k !== 'seek') o[k] = ui[k].value; });
       localStorage.setItem('cassette-walkman', JSON.stringify(o));
     } catch (e) {}
@@ -321,7 +324,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       var o = JSON.parse(localStorage.getItem('cassette-walkman') || 'null');
       if (!o) return;
       Object.keys(ui).forEach(function (k) { if (k !== 'seek' && o[k] != null) ui[k].value = o[k]; });
-      tapeOn = o.tapeOn !== false; shuffle = !!o.shuffle; repeat = o.repeat || 'off'; muted = !!o.muted; vizMode = o.vizMode || 'spectrum';
+      tapeOn = o.tapeOn !== false; shuffle = !!o.shuffle; repeat = o.repeat || 'off'; muted = !!o.muted; vizMode = o.vizMode || 'spectrum'; limiterOn = o.limiterOn !== false;
     } catch (e) {}
   }
 
@@ -350,7 +353,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var lp2 = biq('lowpass', 14500, 0.6);
     var sat = ctx.createWaveShaper(); sat.oversample = '2x'; sat.curve = makeCurve(0);
     var comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -18; comp.knee.value = 20; comp.ratio.value = 2.5; comp.attack.value = 0.01; comp.release.value = 0.25;
+    comp.threshold.value = limiterOn ? -6 : -18; comp.knee.value = limiterOn ? 0 : 20; comp.ratio.value = limiterOn ? 20 : 2.5; comp.attack.value = limiterOn ? 0.003 : 0.01; comp.release.value = limiterOn ? 0.12 : 0.25;
     var vol = ctx.createGain();
     input.connect(hp); hp.connect(warm); warm.connect(pres); pres.connect(lp1); lp1.connect(lp2); lp2.connect(sat); sat.connect(comp); comp.connect(vol);
 
@@ -364,7 +367,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var split = ctx.createChannelSplitter(2), aL = ctx.createAnalyser(), aR = ctx.createAnalyser();
     aL.fftSize = 512; aR.fftSize = 512; aL.smoothingTimeConstant = 0.6; aR.smoothingTimeConstant = 0.6;
     vol.connect(an); vol.connect(split); split.connect(aL, 0); split.connect(aR, 1); vol.connect(ctx.destination);
-    nodes = { input: input, warm: warm, pres: pres, lp1: lp1, lp2: lp2, sat: sat, hiss: hissG, vol: vol, an: an, aL: aL, aR: aR };
+    nodes = { input: input, warm: warm, pres: pres, lp1: lp1, lp2: lp2, sat: sat, comp: comp, hiss: hissG, vol: vol, an: an, aL: aL, aR: aR };
     applyTape(true); setVol();
   }
   function setVol() {
@@ -401,6 +404,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
   function applyTape(forceCurve) {
     var v = function (id) { return +ui[id].value; };
+    $('#oVol').textContent = Math.round(v('vol') * 100) + '%';
     $('#oSpeed').textContent = '+' + v('speed').toFixed(1) + '%';
     $('#oWarm').textContent = '+' + v('warm').toFixed(1) + 'dB';
     $('#oClar').textContent = '+' + v('clar').toFixed(1) + 'dB';
@@ -409,6 +413,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     $('#oWow').textContent = v('wow');
     $('#oHiss').textContent = v('hiss');
     $('#mTape').setAttribute('aria-pressed', String(tapeOn));
+    $('#mLimiter').setAttribute('aria-pressed', String(limiterOn));
+    if (nodes.comp) { nodes.comp.threshold.setTargetAtTime(limiterOn ? -6 : -18, ctx.currentTime, 0.03); nodes.comp.knee.setTargetAtTime(limiterOn ? 0 : 20, ctx.currentTime, 0.03); nodes.comp.ratio.setTargetAtTime(limiterOn ? 20 : 2.5, ctx.currentTime, 0.03); nodes.comp.attack.setTargetAtTime(limiterOn ? 0.003 : 0.01, ctx.currentTime, 0.03); nodes.comp.release.setTargetAtTime(limiterOn ? 0.12 : 0.25, ctx.currentTime, 0.03); }
     if (nodes.warm) {
       var t = ctx.currentTime, on = tapeOn;
       nodes.warm.gain.setTargetAtTime(on ? v('warm') : 0, t, 0.05);
@@ -915,6 +921,10 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   $('#mShuf').addEventListener('click', function () { shuffle = !shuffle; bag = shuffle ? tracks.map(function (t) { return t.id; }).filter(function (x) { return x !== curId; }) : []; updateChips(); saveSettings(); });
   $('#mRep').addEventListener('click', function () { repeat = repeat === 'off' ? 'all' : repeat === 'all' ? 'one' : 'off'; updateChips(); saveSettings(); });
   $('#mTape').addEventListener('click', function () { tapeOn = !tapeOn; applyTape(); saveSettings(); });
+  $('#mLimiter').addEventListener('click', function () { limiterOn = !limiterOn; applyTape(); saveSettings(); });
+  function resetSlider(k) { var el = ui[k]; if (!el) return; el.value = el.defaultValue; if (k === 'vol') setVol(); else if (k !== 'seek') applyTape(); saveSettings(); }
+  document.querySelectorAll('[data-reset]').forEach(function (b) { b.addEventListener('click', function () { resetSlider(b.getAttribute('data-reset')); }); });
+  $('#resetAll').addEventListener('click', function () { ['vol','speed','warm','clar','cut','sat','wow','hiss'].forEach(resetSlider); say('All sliders reset to defaults.'); });
   ['speed', 'warm', 'clar', 'cut', 'sat', 'wow', 'hiss'].forEach(function (k) { ui[k].addEventListener('input', function () { applyTape(); saveSettings(); }); });
   ui.vol.addEventListener('input', function () { setVol(); saveSettings(); });
   ui.seek.addEventListener('input', function () { seeking = true; if (audio && isFinite(audio.a.duration)) audio.a.currentTime = ui.seek.value / 1000 * audio.a.duration; });
