@@ -410,6 +410,12 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     }
   }
 
+  function updateHiss() {
+    if (!nodes.hiss || !ctx) return;
+    var playing = !!(audio && audio.a && !audio.a.paused && !audio.a.ended);
+    var level = tapeOn && playing ? (+ui.hiss.value) / 100 * 0.03 * (limiterOn ? 0.25 : 1) : 0;
+    nodes.hiss.gain.setTargetAtTime(level, ctx.currentTime, 0.05);
+  }
   function applyTape(forceCurve) {
     var v = function (id) { return +ui[id].value; };
     $('#oVol').textContent = Math.round(v('vol') * 100) + '%';
@@ -430,7 +436,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       nodes.pres.gain.setTargetAtTime(on ? v('clar') : 0, t, 0.05);
       nodes.lp1.frequency.setTargetAtTime(on ? v('cut') * 1000 : 22000, t, 0.05);
       nodes.lp2.frequency.setTargetAtTime(on ? v('cut') * 1000 : 22000, t, 0.05);
-      nodes.hiss.gain.setTargetAtTime(on ? v('hiss') / 100 * 0.03 : 0, t, 0.1);
+      updateHiss();
       var amt = on ? v('sat') : 0;
       if (forceCurve || amt !== nodes.satAmt) { nodes.sat.curve = makeCurve(amt); nodes.satAmt = amt; }
     }
@@ -486,9 +492,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     if (audio.plain) a.volume = Math.max(0, Math.min(1, muted ? 0 : +ui.vol.value * duck));
     else routeAudio();
     a.addEventListener('loadedmetadata', function () { if (isFinite(a.duration) && a.duration > 0) { t.dur = a.duration; renderList(); } });
-    a.addEventListener('playing', function () { failStreak = 0; if ('mediaSession' in navigator && audio && audio.a === a) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} } });
-    a.addEventListener('pause', function () { if ('mediaSession' in navigator && audio && audio.a === a && (!audio.bgA || audio.bgA.paused)) { try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {} } });
-    a.addEventListener('ended', function () { if (audio && audio.a === a) next(true); });
+    a.addEventListener('playing', function () { updateHiss(); failStreak = 0; if ('mediaSession' in navigator && audio && audio.a === a) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} } });
+    a.addEventListener('pause', function () { updateHiss(); if ('mediaSession' in navigator && audio && audio.a === a && (!audio.bgA || audio.bgA.paused)) { try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {} } });
+    a.addEventListener('ended', function () { updateHiss(); if (audio && audio.a === a) next(true); });
     a.addEventListener('error', function () {
       if (!audio || audio.fxA !== a) return;
       if (remote && !plain) { say('That server blocks tape processing. Playing without the effect.'); t.plain = true; playId(id, autoplay, true, true); return; }
