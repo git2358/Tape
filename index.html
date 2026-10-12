@@ -348,7 +348,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 (function () {
   'use strict';
 
-  var versionStamp = 'tape20261012optimisation00000001';
+  var versionStamp = 'tape20261012streamingexport00001';
   var $ = function (s) { return document.querySelector(s); };
   $('#versionFooter').textContent = versionStamp;
   var ui = {};
@@ -1348,7 +1348,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     for (var i = 0; i < len; i++) for (var k = 0; k < ch; k++) { var s = Math.max(-1, Math.min(1, d[k][i])); v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true); o += 2; }
     return new Blob([ab], { type: 'audio/wav' });
   }
-  var lamePromise = null, exportingTracks = {}, activeExportId = null;
+  var lamePromise = null, exportingTracks = {}, activeExportId = null, activeExportJob = null;
   function loadMp3Encoder() {
     if (window.lamejs && window.lamejs.Mp3Encoder) return Promise.resolve(window.lamejs);
     if (lamePromise) return lamePromise;
@@ -1364,101 +1364,176 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     });
     return lamePromise;
   }
-  function renderProcessedTrack(track) {
-    return fetch(track.src).then(function (response) {
-      if (!response.ok) throw new Error('Could not read this track (' + response.status + ').');
-      return response.arrayBuffer();
-    }).then(function (data) {
-      var AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) throw new Error('Web Audio is not available in this browser.');
-      var decoder = new AC();
-      return decoder.decodeAudioData(data).then(function (decoded) {
-        try { decoder.close(); } catch (e) {}
-        var rate = tapeOn ? 1 + (+ui.speed.value) / 100 : 1;
-        var sr = 32000, duration = decoded.duration / rate + (tapeOn ? 0.002 : 0);
-        var mobile = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-        var maxDuration = mobile ? 300 : 600;
-        if (!isFinite(duration) || duration <= 0 || duration > maxDuration) throw new Error('For memory safety, MP3 export is limited to ' + (mobile ? '5 minutes on mobile' : '10 minutes on desktop') + ' per track.');
-        var OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
-        if (!OC) throw new Error('Offline audio rendering is not supported in this browser.');
-        var frames = Math.ceil(duration * sr);
-            var estimatedBytes = decoded.length * decoded.numberOfChannels * 4 + frames * 8 + duration * 24000 * 2.2 + 16 * 1024 * 1024;
-        var memoryLimit = mobile ? 160 : 320;
-        if (estimatedBytes > memoryLimit * 1024 * 1024) throw new Error('This track may use too much memory to export safely. Try a shorter track or use desktop.');
-        var oc = new OC(2, frames, sr);
-        var source = oc.createBufferSource(); source.buffer = decoded; source.playbackRate.value = rate;
-        var input = oc.createGain(); input.gain.value = 0.9;
-        var wowDelay = oc.createDelay(0.05); wowDelay.delayTime.value = 0.001;
-        var wowLfo = oc.createOscillator(); wowLfo.type = 'sine';
-        var wowDepth = oc.createGain();
-        var wow = tapeOn ? (+ui.wow.value) / 100 : 0;
-        wowLfo.frequency.value = 0.35 + wow * 2.5;
-        wowDepth.gain.value = wow * 0.0004;
-        wowLfo.connect(wowDepth); wowDepth.connect(wowDelay.delayTime); wowLfo.start(0); wowLfo.stop(duration);
-        var hp = oc.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 35; hp.Q.value = 0.7;
-        var warm = oc.createBiquadFilter(); warm.type = 'peaking'; warm.frequency.value = 150; warm.Q.value = 0.7; warm.gain.value = tapeOn ? +ui.warm.value : 0;
-        var pres = oc.createBiquadFilter(); pres.type = 'peaking'; pres.frequency.value = 3000; pres.Q.value = 0.7; pres.gain.value = tapeOn ? +ui.clar.value : 0;
-        var lp1 = oc.createBiquadFilter(); lp1.type = 'lowpass'; lp1.frequency.value = tapeOn ? +ui.cut.value * 1000 : 22000; lp1.Q.value = 0.6;
-        var lp2 = oc.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = tapeOn ? +ui.cut.value * 1000 : 22000; lp2.Q.value = 0.6;
-        var sat = oc.createWaveShaper(); sat.oversample = '2x'; sat.curve = makeCurve(tapeOn ? +ui.sat.value : 0);
-        var comp = oc.createDynamicsCompressor(); comp.threshold.value = limiterOn ? -12 : 0; comp.knee.value = 0; comp.ratio.value = limiterOn ? 20 : 1; comp.attack.value = limiterOn ? 0.003 : 0.01; comp.release.value = limiterOn ? 0.12 : 0.25;
-        var safety = oc.createDynamicsCompressor(); safety.threshold.value = -1.5; safety.knee.value = 0; safety.ratio.value = 20; safety.attack.value = 0.001; safety.release.value = 0.08;
-        if (tapeOn) {
-          source.connect(input); input.connect(wowDelay); wowDelay.connect(hp); hp.connect(warm); warm.connect(pres); pres.connect(lp1); lp1.connect(lp2); lp2.connect(sat); sat.connect(comp);
-          var noiseBuffer = oc.createBuffer(1, sr * 2, sr), noiseData = noiseBuffer.getChannelData(0);
-          for (var n = 0; n < noiseData.length; n++) noiseData[n] = Math.random() * 2 - 1;
-          var hiss = oc.createBufferSource(); hiss.buffer = noiseBuffer; hiss.loop = true;
-          var hissHP = oc.createBiquadFilter(); hissHP.type = 'highpass'; hissHP.frequency.value = 3500; hissHP.Q.value = 0.7;
-          var hissLP = oc.createBiquadFilter(); hissLP.type = 'lowpass'; hissLP.frequency.value = 12000; hissLP.Q.value = 0.7;
-          var hissGain = oc.createGain(); hissGain.gain.value = (+ui.hiss.value) / 100 * 0.03 * (limiterOn ? 0.25 : 1);
-          hiss.connect(hissHP); hissHP.connect(hissLP); hissLP.connect(hissGain); hissGain.connect(comp); hiss.start(0); hiss.stop(duration);
-        } else {
-          source.connect(comp);
-        }
-        comp.connect(safety); safety.connect(oc.destination); source.start(0);
-        return oc.startRendering();
-      });
-    });
-  }
   function downloadTrack(id, button) {
     var track = tracks.find(function (t) { return t.id === id; });
-    if (!track || exportingTracks[id]) return;
-    if (activeExportId != null) { say('Please wait for the current MP3 export to finish.'); return; }
+    if (!track) return;
+    if (activeExportId != null) {
+      if (activeExportId === id && activeExportJob && activeExportJob.cancel) {
+        activeExportJob.cancel();
+        return;
+      }
+      say('Please wait for the current MP3 export to finish.');
+      return;
+    }
     activeExportId = id;
     exportingTracks[id] = true;
     var oldText = button.textContent;
-    button.disabled = true; button.textContent = '…'; button.title = 'Rendering processed MP3…';
-    say('Preparing ' + track.title + ' for MP3 export…');
+    var job = { cancelled: false, button: button, cancel: null };
+    activeExportJob = job;
+    button.disabled = false;
+    button.textContent = 'Cancel';
+    button.title = 'Cancel this MP3 export';
+    say('Preparing long-form MP3 export for ' + track.title + '…');
+    var mobile = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    var settings = {
+      tape: tapeOn, limiter: limiterOn,
+      speed: +ui.speed.value, wow: +ui.wow.value, warm: +ui.warm.value,
+      clar: +ui.clar.value, cut: +ui.cut.value, sat: +ui.sat.value, hiss: +ui.hiss.value
+    };
     loadMp3Encoder().then(function (lame) {
-      say('Applying tape effects to ' + track.title + '…');
-      return renderProcessedTrack(track).then(function (buffer) {
-        say('Encoding ' + track.title + ' as MP3…');
-        var encoder = new lame.Mp3Encoder(2, buffer.sampleRate, 192);
-        var left = buffer.getChannelData(0), right = buffer.getChannelData(1);
-        var chunks = [], block = 1152;
-        for (var i = 0; i < buffer.length; i += block) {
-          var end = Math.min(i + block, buffer.length), l = new Int16Array(end - i), r = new Int16Array(end - i);
-          for (var j = i; j < end; j++) {
-            var lv = Math.max(-1, Math.min(1, left[j])), rv = Math.max(-1, Math.min(1, right[j]));
-            l[j - i] = lv < 0 ? lv * 32768 : lv * 32767;
-            r[j - i] = rv < 0 ? rv * 32768 : rv * 32767;
-          }
-          var part = encoder.encodeBuffer(l, r); if (part.length) chunks.push(part);
-        }
-        var last = encoder.flush(); if (last.length) chunks.push(last);
-        var blob = new Blob(chunks, { type: 'audio/mpeg' });
-        var url = URL.createObjectURL(blob), link = document.createElement('a');
+      return new Promise(function (resolve, reject) {
+        var settled = false, media = new Audio(), context = null, mediaSource = null, processor = null, mute = null;
+        var encoder = null, chunks = [], nodes = [], oscillators = [], startedAt = 0, lastStatusAt = 0;
+        var rate = settings.tape ? 1 + settings.speed / 100 : 1;
         var filename = track.title.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Cassette Track';
-        link.href = url; link.download = filename + ' (Cassette Walkman).mp3';
-        document.body.appendChild(link); link.click(); link.remove();
-        setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
-        say('Downloaded ' + filename + ' with tape effects baked in.');
+        function cleanup() {
+          media.onloadedmetadata = media.onended = media.onerror = null;
+          media.pause();
+          try { media.removeAttribute('src'); media.load(); } catch (e) {}
+          if (processor) processor.onaudioprocess = null;
+          nodes.concat(oscillators).forEach(function (node) {
+            try { if (node.stop && oscillators.indexOf(node) >= 0) node.stop(); } catch (e) {}
+            try { node.disconnect(); } catch (e) {}
+          });
+          if (context) { try { context.close(); } catch (e) {} }
+        }
+        function fail(error) {
+          if (settled) return;
+          settled = true;
+          cleanup();
+          reject(error instanceof Error ? error : new Error(String(error || 'Export failed.')));
+        }
+        function finish() {
+          if (settled || job.cancelled) return;
+          try {
+            var last = encoder.flush();
+            if (last && last.length) chunks.push(last);
+            if (!chunks.length) throw new Error('The MP3 encoder returned no audio. Check that the source is accessible.');
+            var blob = new Blob(chunks, { type: 'audio/mpeg' });
+            var url = URL.createObjectURL(blob), link = document.createElement('a');
+            link.href = url; link.download = filename + ' (Cassette Walkman).mp3';
+            document.body.appendChild(link); link.click(); link.remove();
+            setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+            settled = true;
+            cleanup();
+            resolve({ filename: filename });
+          } catch (error) { fail(error); }
+        }
+        job.cancel = function () {
+          if (settled) return;
+          job.cancelled = true;
+          fail(new Error('Export cancelled.'));
+        };
+        try {
+          var AC = window.AudioContext || window.webkitAudioContext;
+          if (!AC) throw new Error('Web Audio is not available in this browser.');
+          context = new AC({ sampleRate: 32000 });
+          media.crossOrigin = 'anonymous';
+          media.preload = 'auto';
+          media.playsInline = true;
+          mediaSource = context.createMediaElementSource(media);
+          nodes.push(mediaSource);
+          var input = context.createGain(); input.gain.value = 0.9; nodes.push(input);
+          var wowDelay = context.createDelay(0.05); wowDelay.delayTime.value = 0.001; nodes.push(wowDelay);
+          var wowLfo = context.createOscillator(); wowLfo.type = 'sine';
+          var wow = settings.tape ? settings.wow / 100 : 0;
+          wowLfo.frequency.value = 0.35 + wow * 2.5;
+          var wowDepth = context.createGain(); wowDepth.gain.value = wow * 0.0004;
+          wowLfo.connect(wowDepth); wowDepth.connect(wowDelay.delayTime); wowLfo.start(); oscillators.push(wowLfo); nodes.push(wowDepth);
+          function filter(type, frequency, q, gain) {
+            var node = context.createBiquadFilter();
+            node.type = type; node.frequency.value = frequency; node.Q.value = q;
+            if (gain != null) node.gain.value = gain;
+            nodes.push(node); return node;
+          }
+          var hp = filter('highpass', 35, 0.7);
+          var warm = filter('peaking', 150, 0.7, settings.tape ? settings.warm : 0);
+          var presence = filter('peaking', 3000, 0.7, settings.tape ? settings.clar : 0);
+          var cutoff = settings.tape ? settings.cut * 1000 : 22000;
+          var lp1 = filter('lowpass', cutoff, 0.6), lp2 = filter('lowpass', cutoff, 0.6);
+          var saturation = context.createWaveShaper(); saturation.oversample = '2x'; saturation.curve = makeCurve(settings.tape ? settings.sat : 0); nodes.push(saturation);
+          var comp = context.createDynamicsCompressor();
+          comp.threshold.value = settings.limiter ? -12 : 0; comp.knee.value = 0; comp.ratio.value = settings.limiter ? 20 : 1;
+          comp.attack.value = settings.limiter ? 0.003 : 0.01; comp.release.value = settings.limiter ? 0.12 : 0.25; nodes.push(comp);
+          var safety = context.createDynamicsCompressor();
+          safety.threshold.value = -1.5; safety.knee.value = 0; safety.ratio.value = 20; safety.attack.value = 0.001; safety.release.value = 0.08; nodes.push(safety);
+          mediaSource.connect(input);
+          if (settings.tape) {
+            input.connect(wowDelay); wowDelay.connect(hp); hp.connect(warm); warm.connect(presence);
+            presence.connect(lp1); lp1.connect(lp2); lp2.connect(saturation); saturation.connect(comp);
+            var noiseBuffer = context.createBuffer(1, context.sampleRate * 2, context.sampleRate);
+            var noiseData = noiseBuffer.getChannelData(0);
+            for (var n = 0; n < noiseData.length; n++) noiseData[n] = Math.random() * 2 - 1;
+            var hiss = context.createBufferSource(); hiss.buffer = noiseBuffer; hiss.loop = true; nodes.push(hiss);
+            var hissHP = filter('highpass', 3500, 0.7), hissLP = filter('lowpass', 12000, 0.7);
+            var hissGain = context.createGain(); hissGain.gain.value = settings.hiss / 100 * 0.03 * (settings.limiter ? 0.25 : 1); nodes.push(hissGain);
+            hiss.connect(hissHP); hissHP.connect(hissLP); hissLP.connect(hissGain); hissGain.connect(comp); hiss.start(); oscillators.push(hiss);
+          } else input.connect(comp);
+          processor = context.createScriptProcessor(4096, 2, 2); nodes.push(processor);
+          mute = context.createGain(); mute.gain.value = 0; nodes.push(mute);
+          comp.connect(safety); safety.connect(processor); processor.connect(mute); mute.connect(context.destination);
+          encoder = new lame.Mp3Encoder(2, context.sampleRate, 192);
+          processor.onaudioprocess = function (event) {
+            if (settled || job.cancelled) return;
+            try {
+              var leftIn = event.inputBuffer.getChannelData(0);
+              var rightIn = event.inputBuffer.numberOfChannels > 1 ? event.inputBuffer.getChannelData(1) : leftIn;
+              var left = new Int16Array(leftIn.length), right = new Int16Array(rightIn.length);
+              for (var i = 0; i < leftIn.length; i++) {
+                var l = Math.max(-1, Math.min(1, leftIn[i])), r = Math.max(-1, Math.min(1, rightIn[i]));
+                left[i] = l < 0 ? l * 32768 : l * 32767;
+                right[i] = r < 0 ? r * 32768 : r * 32767;
+              }
+              var part = encoder.encodeBuffer(left, right);
+              if (part && part.length) chunks.push(part);
+              var now = Date.now();
+              if (now - lastStatusAt > 12000 && isFinite(media.duration) && media.duration > 0) {
+                lastStatusAt = now;
+                var pct = Math.min(100, media.currentTime / media.duration * 100);
+                say('Exporting ' + filename + ' · ' + pct.toFixed(0) + '% · ' + fmt(media.currentTime / rate) + ' / ' + fmt(media.duration / rate) + ' · keep this tab open');
+              }
+            } catch (error) { fail(error); }
+          };
+          media.onloadedmetadata = function () {
+            if (settled) return;
+            if (!isFinite(media.duration) || media.duration <= 0) { fail(new Error('Could not determine the source duration.')); return; }
+            var outputDuration = media.duration / rate;
+            if (mobile && outputDuration > 900) { fail(new Error('Long exports are desktop-only. Use a desktop browser for mixes over 15 minutes.')); return; }
+            try {
+              media.playbackRate = rate;
+              media.preservesPitch = false; media.mozPreservesPitch = false; media.webkitPreservesPitch = false;
+              context.resume().then(function () {
+                if (settled) return;
+                startedAt = Date.now();
+                say('Exporting ' + filename + ' · 0% · keep this tab open for about ' + fmt(outputDuration) + '.');
+                return media.play();
+              }).catch(fail);
+            } catch (error) { fail(error); }
+          };
+          media.onended = finish;
+          media.onerror = function () { fail(new Error('The source could not be read for export. Remote tracks must allow browser audio access (CORS).')); };
+          media.src = track.src;
+          media.load();
+        } catch (error) { fail(error); }
       });
+    }).then(function (result) {
+      say('Downloaded ' + result.filename + ' with cassette effects baked in.');
     }).catch(function (error) {
-      say('MP3 export failed: ' + (error && error.message ? error.message : 'unknown error') + ' Remote tracks must allow browser access (CORS).');
+      say('MP3 export ' + (job.cancelled ? 'cancelled.' : 'failed: ' + (error && error.message ? error.message : 'unknown error') + ' Remote tracks must allow browser audio access (CORS).'));
     }).then(function () {
       exportingTracks[id] = false;
       activeExportId = null;
+      activeExportJob = null;
       button.disabled = false; button.textContent = oldText; button.title = 'Download processed MP3';
       if (track.revokeWhenDone) releaseTrackURL(track);
     });
