@@ -408,6 +408,10 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var AC = window.AudioContext || window.webkitAudioContext;
     ctx = new AC();
     var input = ctx.createGain(); input.gain.value = 0.9;
+    var wowDelay = ctx.createDelay(0.05); wowDelay.delayTime.value = 0.012;
+    var wowLfo = ctx.createOscillator(); wowLfo.type = 'sine'; wowLfo.frequency.value = 1.1;
+    var wowDepth = ctx.createGain(); wowDepth.gain.value = 0;
+    wowLfo.connect(wowDepth); wowDepth.connect(wowDelay.delayTime); wowLfo.start();
     var hp = biq('highpass', 35, 0.7);
     var warm = biq('peaking', 150, 0.7, 0);
     var pres = biq('peaking', 3000, 0.7, 0);
@@ -418,7 +422,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     comp.threshold.value = limiterOn ? -12 : 0; comp.knee.value = 0; comp.ratio.value = limiterOn ? 20 : 1; comp.attack.value = limiterOn ? 0.003 : 0.01; comp.release.value = limiterOn ? 0.12 : 0.25;
     var safety = ctx.createDynamicsCompressor(); safety.threshold.value = -1.5; safety.knee.value = 0; safety.ratio.value = 20; safety.attack.value = 0.001; safety.release.value = 0.08;
     var vol = ctx.createGain();
-    input.connect(hp); hp.connect(warm); warm.connect(pres); pres.connect(lp1); lp1.connect(lp2); lp2.connect(sat); sat.connect(comp); comp.connect(safety); safety.connect(vol);
+    input.connect(wowDelay); wowDelay.connect(hp); hp.connect(warm); warm.connect(pres); pres.connect(lp1); lp1.connect(lp2); lp2.connect(sat); sat.connect(comp); comp.connect(safety); safety.connect(vol);
 
     var nb = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate), nd = nb.getChannelData(0);
     for (var i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
@@ -430,7 +434,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var split = ctx.createChannelSplitter(2), aL = ctx.createAnalyser(), aR = ctx.createAnalyser();
     aL.fftSize = 512; aR.fftSize = 512; aL.smoothingTimeConstant = 0.6; aR.smoothingTimeConstant = 0.6;
     vol.connect(an); vol.connect(split); split.connect(aL, 0); split.connect(aR, 1); vol.connect(ctx.destination);
-    nodes = { input: input, warm: warm, pres: pres, lp1: lp1, lp2: lp2, sat: sat, comp: comp, safety: safety, hiss: hissG, vol: vol, an: an, aL: aL, aR: aR };
+    nodes = { input: input, wowDelay: wowDelay, wowLfo: wowLfo, wowDepth: wowDepth, warm: warm, pres: pres, lp1: lp1, lp2: lp2, sat: sat, comp: comp, safety: safety, hiss: hissG, vol: vol, an: an, aL: aL, aR: aR };
     applyTape(true); setVol();
   }
   function setVol() {
@@ -494,6 +498,11 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       nodes.pres.gain.setTargetAtTime(on ? v('clar') : 0, t, 0.05);
       nodes.lp1.frequency.setTargetAtTime(on ? v('cut') * 1000 : 22000, t, 0.05);
       nodes.lp2.frequency.setTargetAtTime(on ? v('cut') * 1000 : 22000, t, 0.05);
+      if (nodes.wowLfo && nodes.wowDepth) {
+        var wow = on ? v('wow') / 100 : 0;
+        nodes.wowLfo.frequency.setTargetAtTime(0.35 + wow * 2.5, t, 0.05);
+        nodes.wowDepth.gain.setTargetAtTime(wow * 0.0004, t, 0.05);
+      }
       updateHiss();
       var amt = on ? v('sat') : 0;
       if (forceCurve || amt !== nodes.satAmt) { nodes.sat.curve = makeCurve(amt); nodes.satAmt = amt; }
@@ -1364,6 +1373,13 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
         var oc = new OC(2, frames, sr);
         var source = oc.createBufferSource(); source.buffer = decoded; source.playbackRate.value = rate;
         var input = oc.createGain(); input.gain.value = 0.9;
+        var wowDelay = oc.createDelay(0.05); wowDelay.delayTime.value = 0.012;
+        var wowLfo = oc.createOscillator(); wowLfo.type = 'sine';
+        var wowDepth = oc.createGain();
+        var wow = tapeOn ? (+ui.wow.value) / 100 : 0;
+        wowLfo.frequency.value = 0.35 + wow * 2.5;
+        wowDepth.gain.value = wow * 0.0004;
+        wowLfo.connect(wowDepth); wowDepth.connect(wowDelay.delayTime); wowLfo.start(0); wowLfo.stop(duration);
         var hp = oc.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 35; hp.Q.value = 0.7;
         var warm = oc.createBiquadFilter(); warm.type = 'peaking'; warm.frequency.value = 150; warm.Q.value = 0.7; warm.gain.value = tapeOn ? +ui.warm.value : 0;
         var pres = oc.createBiquadFilter(); pres.type = 'peaking'; pres.frequency.value = 3000; pres.Q.value = 0.7; pres.gain.value = tapeOn ? +ui.clar.value : 0;
@@ -1373,7 +1389,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
         var comp = oc.createDynamicsCompressor(); comp.threshold.value = limiterOn ? -12 : 0; comp.knee.value = 0; comp.ratio.value = limiterOn ? 20 : 1; comp.attack.value = limiterOn ? 0.003 : 0.01; comp.release.value = limiterOn ? 0.12 : 0.25;
         var safety = oc.createDynamicsCompressor(); safety.threshold.value = -1.5; safety.knee.value = 0; safety.ratio.value = 20; safety.attack.value = 0.001; safety.release.value = 0.08;
         if (tapeOn) {
-          source.connect(input); input.connect(hp); hp.connect(warm); warm.connect(pres); pres.connect(lp1); lp1.connect(lp2); lp2.connect(sat); sat.connect(comp);
+          source.connect(input); input.connect(wowDelay); wowDelay.connect(hp); hp.connect(warm); warm.connect(pres); pres.connect(lp1); lp1.connect(lp2); lp2.connect(sat); sat.connect(comp);
           var noiseBuffer = oc.createBuffer(1, sr * 2, sr), noiseData = noiseBuffer.getChannelData(0);
           for (var n = 0; n < noiseData.length; n++) noiseData[n] = Math.random() * 2 - 1;
           var hiss = oc.createBufferSource(); hiss.buffer = noiseBuffer; hiss.loop = true;
