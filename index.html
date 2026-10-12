@@ -252,7 +252,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
         <button class="mode" id="mShuf" aria-pressed="false"><i></i>Shuffle</button>
         <button class="mode" id="mRep" aria-pressed="false"><i></i><span id="mRepT">Repeat off</span></button>
         <button class="mode" id="mTape" aria-pressed="true"><i></i>Tape sound</button>
-        <button class="mode" id="mLimiter" aria-pressed="true"><i></i>Auto volume limiter ON</button>
+        <button class="mode" id="mLimiter" aria-pressed="true"><i></i>Auto volume limiter</button>
       </div>
     </section>
 
@@ -722,7 +722,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     $('#cRep').classList.toggle('on', repeat !== 'off');
     $('#cRep').textContent = repeat === 'one' ? 'REPEAT 1' : 'REPEAT';
     $('#cTape').classList.toggle('on', tapeOn && !(audio && (audio.plain || audio.bypass)));
-    $('#mLimiter').classList.toggle('go', limiterOn);
+    $('#mLimiter').setAttribute('aria-pressed', String(limiterOn));
     updateLimiterReadout();
     $('#cSpd').classList.toggle('on', tapeOn);
     $('#cSpd').textContent = (tapeOn ? '+' + (+ui.speed.value).toFixed(1) : '+0.0') + '%';
