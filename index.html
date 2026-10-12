@@ -421,7 +421,6 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     $('#oHiss').textContent = v('hiss');
     $('#mTape').setAttribute('aria-pressed', String(tapeOn));
     $('#mLimiter').setAttribute('aria-pressed', String(limiterOn));
-    $('#mLimiter').textContent = limiterOn ? 'Auto volume limiter ON' : 'Auto volume limiter OFF';
     if (nodes.comp) { nodes.comp.threshold.setTargetAtTime(limiterOn ? -6 : -18, ctx.currentTime, 0.03); nodes.comp.knee.setTargetAtTime(limiterOn ? 0 : 20, ctx.currentTime, 0.03); nodes.comp.ratio.setTargetAtTime(limiterOn ? 20 : 2.5, ctx.currentTime, 0.03); nodes.comp.attack.setTargetAtTime(limiterOn ? 0.003 : 0.01, ctx.currentTime, 0.03); nodes.comp.release.setTargetAtTime(limiterOn ? 0.12 : 0.25, ctx.currentTime, 0.03); }
     if (nodes.warm) {
       var t = ctx.currentTime, on = tapeOn;
