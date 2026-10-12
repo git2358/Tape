@@ -485,7 +485,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
   /* ---------- playback ---------- */
   function teardown() {
-    if (!audio) return;
+    if (nodes.hiss && ctx) nodes.hiss.gain.setTargetAtTime(0, ctx.currentTime, 0.015);
+    if (!audio) { updateHiss(); return; }
     var old = audio;
     [old.fxA, old.bgA, old.a].forEach(function (el) {
       if (!el) return;
@@ -495,6 +496,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     });
     try { if (old.node) old.node.disconnect(); } catch (e) {}
     audio = null;
+    updateHiss();
   }
 
   function playId(id, autoplay, noHist, plain) {
