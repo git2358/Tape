@@ -81,6 +81,10 @@ body[data-theme="rock"] .cassette svg text { font-family:"Anton",sans-serif; }
 body[data-theme="jazz"] .cassette svg text { font-family:"Playfair Display",serif; }
 body[data-theme="edm"] .panel,body[data-theme="pop"] .panel { box-shadow:inset 0 1px 0 #ffffff18,0 0 20px color-mix(in srgb,var(--accent) 14%,transparent); }
 body[data-theme="rock"] .panel { box-shadow:inset 0 1px 0 #ffffff10,0 10px 30px #0009; }
+#shellG stop:first-child { stop-color:var(--panel-2); }
+#shellG stop:last-child { stop-color:var(--shell); }
+#hubG stop:first-child { stop-color:var(--silver-hi); }
+#hubG stop:last-child { stop-color:var(--silver-lo); }
 
 
 .panel {
@@ -332,7 +336,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
   /* ---------- state ---------- */
   var tracks = [], curId = null, nextId = 1, shuffle = false, repeat = 'off', tapeOn = true;
-  var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, beatEnergy = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic';
+  var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic', pendingGenre = '', pendingGenreCount = 0;
   var bag = [], hist = [], audio = null, ctx = null, nodes = {}, vizMode = 'spectrum', muted = false, limiterOn = true;
   var needsNativeBackgroundFallback = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var duck = 1, seekDir = 0, seekTimer = null, dragId = null, seeking = false, failStreak = 0;
@@ -842,11 +846,12 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var norm=Math.max(0.001,bass+mid+high), b=bass/norm, m=mid/norm, h=high/norm;
     var bassLevel=bass/Math.max(1,Math.floor(115/hzPerBin)-Math.floor(35/hzPerBin));
     var rise=Math.max(0,bassLevel-prevBass); prevBass=bassLevel;
-    if(rise>0.045 && (!lastBeat || ts-lastBeat>260) && ts-lastBeat<1800){
+    if (rise > 0.045 && (!lastBeat || ts-lastBeat > 1800)) { lastBeat = ts; }
+    else if (rise > 0.045 && ts-lastBeat > 260) {
       var interval=(ts-lastBeat)/1000;
       if(interval>=0.27&&interval<=1.5){beatIntervals.push(interval);if(beatIntervals.length>12)beatIntervals.shift();}
       lastBeat=ts;
-    } else if (!lastBeat && rise>0.045) lastBeat=ts;
+    }
     if(beatIntervals.length>=4){
       var sorted=beatIntervals.slice().sort(function(a,b){return a-b;});
       var med=sorted[Math.floor(sorted.length/2)];
@@ -864,9 +869,15 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     else if(bpm>=105&&bpm<=155&&m>0.34&&energy>0.19&&h>0.13){candidate='rock';confidence=0.56+(h>0.22?0.05:0);}
     else if(bpm>=90&&bpm<=145&&h>0.16&&energy>0.16){candidate='pop';confidence=0.56;}
     else if(bpm>=75&&bpm<=150&&h>0.13&&b<0.38){candidate='retro';confidence=0.52;}
-    if(candidate==='generic'||confidence<0.55){detectedGenre='generic';genreConfidence=0;stableTheme='generic';}
-    else {detectedGenre=candidate;genreConfidence=confidence;stableTheme=candidate;}
-    if(themeMode==='auto') applyTheme(stableTheme);
+    if (confidence < 0.55) candidate = 'generic';
+    if (candidate === pendingGenre) pendingGenreCount++;
+    else { pendingGenre = candidate; pendingGenreCount = 1; }
+    if (pendingGenreCount >= 6) {
+      stableTheme = pendingGenre;
+      detectedGenre = stableTheme;
+      genreConfidence = stableTheme === 'generic' ? 0 : confidence;
+    }
+    if (themeMode === 'auto') applyTheme(stableTheme);
   }
   function drawViz() {
     var dpr = Math.min(window.devicePixelRatio || 1, 2), W = viz.clientWidth, H = viz.clientHeight;
