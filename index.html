@@ -351,7 +351,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
   /* ---------- state ---------- */
   var tracks = [], curId = null, nextId = 1, shuffle = false, repeat = 'off', tapeOn = true;
-  var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic', trackAnalyzed = false, genreSegments = [], segmentTotals = {bass:0,mid:0,high:0,energy:0,spectralFlux:0,beatStrength:0,lowTransient:0,harmonicity:0,onsets:0}, featureTotals = {bass:0,mid:0,high:0,energy:0}, prevSpectrum = null, fluxHistory = [], lastOnset = 0, trackAnalysisToken = 0;
+  var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic', trackAnalyzed = false, genreSegments = [], segmentTotals = {bass:0,mid:0,high:0,energy:0,spectralFlux:0,beatStrength:0,lowTransient:0,harmonicity:0,onsets:0}, featureTotals = {bass:0,mid:0,high:0,energy:0}, prevSpectrum = null, fluxHistory = [], lastOnset = 0, trackAnalysisToken = 0, fullTrackAnalysisActive = false;
   var bag = [], hist = [], audio = null, ctx = null, nodes = {}, vizMode = 'spectrum', muted = false, limiterOn = true;
   var needsNativeBackgroundFallback = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var duck = 1, seekDir = 0, seekTimer = null, dragId = null, seeking = false, failStreak = 0;
@@ -539,7 +539,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       bgA.src = t.src; bgA.volume = 0.001;
     }
     audio = { a: a, fxA: useEffects ? a : null, bgA: bgA, node: node, plain: !useEffects, bypass: false, id: id };
-    preanalyzeVoice(t, id);
+    preanalyzeTrack(t, id);
     if (audio.plain) a.volume = Math.max(0, Math.min(1, muted ? 0 : +ui.vol.value * duck));
     else routeAudio();
     a.addEventListener('loadedmetadata', function () { if (isFinite(a.duration) && a.duration > 0) { t.dur = a.duration; renderList(); } });
@@ -856,62 +856,86 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     themeSamples = 0; trackAnalyzed = false; genreSegments = [];
     segmentTotals = {bass:0,mid:0,high:0,energy:0,spectralFlux:0,beatStrength:0,lowTransient:0,harmonicity:0,onsets:0};
     featureTotals = {bass:0,mid:0,high:0,energy:0}; prevSpectrum = null; fluxHistory = []; lastOnset = 0;
-    stableTheme = 'generic';
+    stableTheme = 'generic'; fullTrackAnalysisActive = false;
     /* Keep the currently displayed Auto theme while a new track is being analysed.
        The new track's confident result (including Generic) will replace it later. */
   }
-  /* Analyse a complete local track in the background while playback continues.
-     This deliberately detects speech only; genre labels still use the live spectral analyser. */
-  function preanalyzeVoice(track, id) {
-    /* Full-track decoding is available for local files. Remote streams may be large or
-       disallow CORS, so those continue to use the live analyser instead. */
-    if (!track.file || typeof track.file.arrayBuffer !== 'function' || track.file.size > 200 * 1024 * 1024) return;
+  /* Decode local files and classify from features sampled across the whole track. */
+  function preanalyzeTrack(track, id) {
+    if (!track.file || typeof track.file.arrayBuffer !== 'function' || track.file.size > 200 * 1024 * 1024 || !ctx) return;
     var token = ++trackAnalysisToken;
-    track.file.arrayBuffer().then(function (data) {
+    fullTrackAnalysisActive = true;
+    function fail() { if (curId === id && token === trackAnalysisToken) fullTrackAnalysisActive = false; }
+    track.file.arrayBuffer().then(function(data) {
       if (!ctx || curId !== id || token !== trackAnalysisToken) return;
-      return ctx.decodeAudioData(data.slice(0)).then(function (buf) {
+      return ctx.decodeAudioData(data.slice(0)).then(function(buf) {
         if (!audio || audio.id !== id || curId !== id || token !== trackAnalysisToken || !buf.length) return;
-        var channel = buf.getChannelData(0), sr = buf.sampleRate, hop = Math.max(1, Math.floor(sr * 0.02));
-        var pos = 0, count = 0, meanRms = 0, m2Rms = 0, sumZcr = 0, active = 0, transitions = 0, prevActive = false;
-        function scanChunk() {
-          if (!audio || audio.id !== id || curId !== id || token !== trackAnalysisToken) return;
-          var stopAt = Math.min(channel.length, pos + sr * 5);
-          while (pos + hop < stopAt) {
-            var energy = 0, crossings = 0, prev = channel[pos];
-            for (var j = pos; j < pos + hop; j++) {
-              var v = channel[j]; energy += v * v;
-              if ((v >= 0 && prev < 0) || (v < 0 && prev >= 0)) crossings++;
-              prev = v;
-            }
-            var rms = Math.sqrt(energy / hop), zcr = crossings / hop, nowActive = rms > 0.008;
-            count++;
-            var delta = rms - meanRms; meanRms += delta / count; m2Rms += delta * (rms - meanRms);
-            sumZcr += zcr;
-            if (nowActive) active++;
-            if (nowActive !== prevActive) transitions++;
-            prevActive = nowActive;
-            pos += hop;
-          }
-          if (pos + hop < channel.length) { setTimeout(scanChunk, 0); return; }
-          if (count < 100) return;
-          var meanZcr = sumZcr / count, rmsCv = Math.sqrt(m2Rms / count) / Math.max(0.001, meanRms);
-          var zcrFit = Math.max(0, 1 - Math.abs(meanZcr - 0.085) / 0.11);
-          var speechScore = 0.34 * zcrFit +
-            0.25 * Math.min(1, rmsCv / 0.85) +
-            0.22 * Math.min(1, transitions / Math.max(1, count * 0.055)) +
-            0.19 * Math.min(1, (active / count) / 0.78);
-          if (speechScore >= 0.72 && meanRms > 0.006 && meanZcr >= 0.025 && meanZcr <= 0.22) {
-            detectedGenre = 'voice'; genreConfidence = speechScore; stableTheme = 'voice'; trackAnalyzed = true;
-            if (themeMode === 'auto') applyTheme('voice');
-          }
+        var sr=buf.sampleRate, x=buf.getChannelData(0), stride=Math.max(1,Math.floor(sr/11025)), N=1024, hop=Math.max(stride*N,Math.floor(sr*.1));
+        var re=new Float64Array(N), im=new Float64Array(N), win=new Float64Array(N), prev=null, pos=0, segN=0, segFrames=0;
+        for(var w=0;w<N;w++) win[w]=.5-.5*Math.cos(2*Math.PI*w/(N-1));
+        var seg={bass:0,mid:0,high:0,energy:0,flux:0,beat:0,trans:0,harm:0,onset:0};
+        var avg={bass:0,mid:0,high:0,energy:0,flux:0,beat:0,trans:0,harm:0,onset:0};
+        var fluxHist=[], lastOnset=-10000,lastBass=0,lastBeat=0,intervals=[],bpms=[];
+        function fft(){
+          var j=0;
+          for(var i=1;i<N;i++){var bit=N>>1;for(;j&bit;bit>>=1)j^=bit;j^=bit;if(i<j){var t=re[i];re[i]=re[j];re[j]=t;t=im[i];im[i]=im[j];im[j]=t;}}
+          for(var len=2;len<=N;len<<=1){var a=-2*Math.PI/len,wr0=Math.cos(a),wi0=Math.sin(a);for(var b=0;b<N;b+=len){var wr=1,wi=0;for(var k=0;k<len/2;k++){var e=b+k,o=e+len/2,tr=wr*re[o]-wi*im[o],ti=wr*im[o]+wi*re[o];re[o]=re[e]-tr;im[o]=im[e]-ti;re[e]+=tr;im[e]+=ti;var nw=wr*wr0-wi*wi0;wi=wr*wi0+wi*wr0;wr=nw;}}}
         }
-        scanChunk();
+        function scan(){
+          if(!audio||audio.id!==id||curId!==id||token!==trackAnalysisToken)return;
+          var stop=Math.min(x.length-stride*N,pos+sr*5);
+          while(pos<stop){
+            var sq=0;
+            for(var q=0;q<N;q++){var v=x[pos+q*stride]||0;sq+=v*v;re[q]=v*win[q];im[q]=0;}
+            fft();
+            var ba=0,mi=0,hi=0,mt=0,mag=new Float32Array(N/2);
+            for(var z=1;z<N/2;z++){var hz=z*11025/N,m=Math.sqrt(re[z]*re[z]+im[z]*im[z])/N;mag[z]=m;mt+=m;if(hz>=35&&hz<150)ba+=m;else if(hz<2500&&hz>=150)mi+=m;else if(hz>=2500&&hz<5200)hi+=m;}
+            var norm=Math.max(.000001,ba+mi+hi),bass=ba/norm,mid=mi/norm,high=hi/norm,flux=0,peaks=0;
+            if(prev)for(var f=1;f<mag.length;f++)if(mag[f]>prev[f])flux+=mag[f]-prev[f];
+            flux/=Math.max(.0001,mt);
+            for(var p=2;p<mag.length-2;p++)if(mag[p]>mag[p-1]&&mag[p]>=mag[p+1]&&mag[p]>mt/mag.length*1.8)peaks+=mag[p];
+            var harm=Math.min(1,peaks/Math.max(.00001,mt)*.8),energy=Math.min(1,Math.sqrt(sq/N)/.16),time=pos/sr*1000;
+            fluxHist.push(flux);if(fluxHist.length>30)fluxHist.shift();
+            var fm=fluxHist.reduce(function(a,v){return a+v;},0)/fluxHist.length,onset=flux>Math.max(.045,fm*1.5)&&time-lastOnset>180;
+            if(onset)lastOnset=time;
+            var rise=Math.max(0,bass-lastBass);lastBass=bass;
+            if(rise>.045&&(!lastBeat||time-lastBeat>1800))lastBeat=time;
+            else if(rise>.045&&time-lastBeat>260){var iv=(time-lastBeat)/1000;if(iv>=.27&&iv<=1.5)intervals.push(iv);if(intervals.length>80)intervals.shift();lastBeat=time;}
+            if(intervals.length>=3){var si=intervals.slice().sort(function(a,b){return a-b;}),bpm=60/si[Math.floor(si.length/2)];if(bpm<70)bpm*=2;else if(bpm>160)bpm/=2;if(bpm>=65&&bpm<=180)bpms.push(bpm);}
+            var vals={bass:bass,mid:mid,high:high,energy:energy,flux:Math.min(1,flux),beat:Math.min(1,flux*8),trans:Math.min(1,rise/.075),harm:harm,onset:onset?1:0};
+            Object.keys(seg).forEach(function(k){seg[k]+=vals[k]||0;});segFrames++;pos+=hop;prev=mag;
+            if(segFrames===20){Object.keys(seg).forEach(function(k){avg[k]+=seg[k]/segFrames;});avg.onset+=Math.min(1,seg.onset/5);seg={bass:0,mid:0,high:0,energy:0,flux:0,beat:0,trans:0,harm:0,onset:0};segFrames=0;segN++;}
+          }
+          if(pos<x.length-stride*N){setTimeout(scan,0);return;}
+          if(segFrames){Object.keys(seg).forEach(function(k){avg[k]+=seg[k]/segFrames;});avg.onset+=Math.min(1,seg.onset/5);segN++;}
+          if(!segN||!audio||audio.id!==id||curId!==id||token!==trackAnalysisToken){fail();return;}
+          Object.keys(avg).forEach(function(k){avg[k]/=segN;});
+          var regularity=0;
+          if(intervals.length>=4){var mean=intervals.reduce(function(a,v){return a+v;},0)/intervals.length,variance=intervals.reduce(function(a,v){return a+(v-mean)*(v-mean);},0)/intervals.length;regularity=Math.max(0,1-Math.sqrt(variance)/Math.max(.001,mean));}
+          var bpmAvg=bpms.length?bpms.reduce(function(a,v){return a+v;},0)/bpms.length:0;
+          function fit(v,lo,hi,soft){if(!v)return 0;if(v>=lo&&v<=hi)return 1;return Math.max(0,1-(v<lo?lo-v:v-hi)/soft);}
+          var bass=avg.bass,mid=avg.mid,high=avg.high,energy=avg.energy,flux=Math.min(1,avg.flux/.22),onset=Math.min(1,avg.onset),beat=Math.min(1,avg.beat/.45),trans=Math.min(1,avg.trans/.18),harm=Math.min(1,avg.harm/.42);
+          var scores={
+            edm:.20*fit(bpmAvg,118,150,38)+.14*Math.min(1,bass/.34)+.12*Math.min(1,energy/.28)+.10*Math.min(1,high/.24)+.16*regularity+.10*flux+.08*onset+.06*beat+.04*trans,
+            hiphop:.20*fit(bpmAvg,76,112,32)+.18*Math.min(1,bass/.36)+.17*Math.min(1,mid/.44)+.08*(1-Math.min(1,high/.36))+.08*(1-regularity)+.10*trans+.08*beat+.06*harm-.03*onset,
+            jazz:.22*fit(bpmAvg,65,115,30)+.22*Math.min(1,mid/.44)+.16*(1-Math.min(1,high/.3))+.15*(1-Math.min(1,energy/.32))+.12*harm+.07*(1-onset)+.06*(1-regularity),
+            rock:.20*fit(bpmAvg,100,165,35)+.18*Math.min(1,mid/.42)+.17*Math.min(1,high/.27)+.16*Math.min(1,energy/.28)+.08*flux+.08*onset+.07*harm+.06*beat,
+            pop:.22*fit(bpmAvg,88,150,35)+.16*Math.min(1,high/.25)+.16*Math.min(1,energy/.27)+.12*Math.min(1,mid/.42)+.10*regularity+.08*flux+.07*onset+.05*harm+.04*beat,
+            retro:.20*fit(bpmAvg,75,150,40)+.16*Math.min(1,high/.24)+.16*(1-Math.min(1,bass/.42))+.16*Math.min(1,mid/.44)+.12*harm+.08*regularity+.06*beat+.06*(1-onset)
+          };
+          var ranked=Object.keys(scores).map(function(k){return {genre:k,score:scores[k]};}).sort(function(a,b){return b.score-a.score;}),best=ranked[0],margin=best.score-ranked[1].score;
+          var voice=Math.min(1,Math.max(0,(mid-.34)*2.3))*.34+(1-Math.min(1,bass/.38))*.16+(1-Math.min(1,beat/.65))*.18+(1-Math.min(1,regularity/.65))*.14+(1-Math.min(1,flux/.8))*.10+(1-onset)*.08;
+          var genre='generic',confidence=Math.max(0,Math.min(.99,best.score));
+          if(voice>=.64&&best.score<.64){genre='voice';confidence=voice;}else if(best.score>=.40&&margin>=.025)genre=best.genre;
+          detectedGenre=genre;stableTheme=genre;genreConfidence=confidence;if(bpmAvg)detectedBpm=bpmAvg;
+          trackAnalyzed=true;fullTrackAnalysisActive=false;if(themeMode==='auto')applyTheme(genre);
+        }
+        scan();
       });
-    }).catch(function () {});
+    }).catch(function(){fail();});
   }
-
   function estimateGenre(ts, playing) {
-    if (!playing || trackAnalyzed || !audio || audio.plain || audio.bypass || !nodes.an || !ctx) return;
+    if (!playing || trackAnalyzed || fullTrackAnalysisActive || !audio || audio.plain || audio.bypass || !nodes.an || !ctx) return;
     if (genreSegments.length >= 12) { trackAnalyzed = true; return; }
     if (ts - lastGenreSample < 100) return;
     lastGenreSample = ts;
