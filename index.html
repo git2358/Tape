@@ -1309,7 +1309,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     $('#cMode').classList.toggle('on', playing || seekDir !== 0);
     $('#cMix').classList.toggle('on', mixOn);
     $('#cMix').classList.toggle('off', !mixOn);
-    $('#cMix').textContent = mixOn ? 'MIX ON' : 'MIX OFF';
+    $('#cMix').textContent = 'MIX';
     $('#cTape').classList.toggle('on', tapeOn && !(audio && (audio.plain || audio.bypass)));
     readSpectrum(dt, playing); drawViz(); updateLimiterReadout();
     requestAnimationFrame(frame);
