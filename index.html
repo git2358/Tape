@@ -689,8 +689,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     if (!mixOn || !audio || !playing || !isFinite(dur) || dur <= 0) return;
     var end = dur * 0.8;
     if (mixTransition) {
-      if (mixTransition.waiting && now >= end) { try { audio.a.pause(); } catch (e) {} }
-      else if (!mixTransition.waiting && ctx.currentTime - mixTransition.startedAt >= mixTransition.duration) promoteMixDeck();
+      if (!mixTransition.waiting && ctx.currentTime - mixTransition.startedAt >= mixTransition.duration) promoteMixDeck();
       return;
     }
     var fade = Math.min(10, Math.max(4, dur * 0.06));
