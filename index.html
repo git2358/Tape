@@ -249,7 +249,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
           <button class="mode viz-mode" data-viz="dual" aria-pressed="false">Dual trace</button>
           <button class="mode viz-mode" data-viz="meter" aria-pressed="false">Peak meter</button>
         </div>
-        <div class="chips"><span id="cShuf">SHUFFLE</span><span id="cRep">REPEAT</span><span id="cTape">TAPE FX</span><span id="cSpd">+3.0%</span><span id="cLimiter">LIMITER 0.0 dB</span><span id="cMode">STOP</span></div>
+        <div class="chips"><span id="cShuf">SHUFFLE</span><span id="cRep">REPEAT</span><span id="cTape">TAPE FX</span><span id="cSpd">+3.0%</span><span id="cLimiter">LIMITER 0.0 dB</span><span id="cMode">STOP</span><span id="cMix" class="off">MIX OFF</span></div>
       </div>
     </section>
 
@@ -1307,6 +1307,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     $('#kRew').classList.toggle('latched', seekDir < 0); $('#kFf').classList.toggle('latched', seekDir > 0);
     $('#cMode').textContent = seekDir < 0 ? 'REW' : seekDir > 0 ? 'FF' : playing ? 'PLAY' : (a && now > 0 ? 'PAUSE' : 'STOP');
     $('#cMode').classList.toggle('on', playing || seekDir !== 0);
+    $('#cMix').classList.toggle('on', mixOn);
+    $('#cMix').classList.toggle('off', !mixOn);
+    $('#cMix').textContent = mixOn ? 'MIX ON' : 'MIX OFF';
     $('#cTape').classList.toggle('on', tapeOn && !(audio && (audio.plain || audio.bypass)));
     readSpectrum(dt, playing); drawViz(); updateLimiterReadout();
     requestAnimationFrame(frame);
