@@ -348,12 +348,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 (function () {
   'use strict';
 
-  var versionStamp = (function () {
-    if (window.crypto && typeof window.crypto.randomUUID === 'function') return window.crypto.randomUUID().replace(/-/g, '');
-    var out = '';
-    for (var i = 0; i < 32; i++) out += Math.floor(Math.random() * 16).toString(16);
-    return out;
-  }());
+  var versionStamp = 'tape20261012optimisation00000001';
   var $ = function (s) { return document.querySelector(s); };
   $('#versionFooter').textContent = versionStamp;
   var ui = {};
@@ -408,7 +403,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var AC = window.AudioContext || window.webkitAudioContext;
     ctx = new AC();
     var input = ctx.createGain(); input.gain.value = 0.9;
-    var wowDelay = ctx.createDelay(0.05); wowDelay.delayTime.value = 0.012;
+    var wowDelay = ctx.createDelay(0.05); wowDelay.delayTime.value = 0.001;
     var wowLfo = ctx.createOscillator(); wowLfo.type = 'sine'; wowLfo.frequency.value = 1.1;
     var wowDepth = ctx.createGain(); wowDepth.gain.value = 0;
     wowLfo.connect(wowDepth); wowDepth.connect(wowDelay.delayTime); wowLfo.start();
@@ -877,11 +872,20 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     else if (!pending) say('No audio files found in that selection.');
     renderList();
   }
+  function releaseTrackURL(track) {
+    if (!track || !track.local || !/^blob:/i.test(track.src)) return;
+    if (exportingTracks[track.id]) { track.revokeWhenDone = true; return; }
+    try { URL.revokeObjectURL(track.src); } catch (e) {}
+    track.src = '';
+  }
   function removeTrack(id) {
+    var removed = tracks.find(function (t) { return t.id === id; });
     var wasCur = id === curId;
+    if (mixDeck && mixDeck.id === id) discardMixDeck();
+    if (wasCur) { discardMixDeck(); teardown(); curId = null; showIdleTheme(); setLabels(); }
     tracks = tracks.filter(function (t) { return t.id !== id; });
     bag = bag.filter(function (x) { return x !== id; });
-    if (wasCur) { teardown(); curId = null; showIdleTheme(); setLabels(); }
+    releaseTrackURL(removed);
     renderList();
   }
   function moveBy(id, d) {
@@ -1338,7 +1342,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     for (var i = 0; i < len; i++) for (var k = 0; k < ch; k++) { var s = Math.max(-1, Math.min(1, d[k][i])); v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true); o += 2; }
     return new Blob([ab], { type: 'audio/wav' });
   }
-  var lamePromise = null, exportingTracks = {};
+  var lamePromise = null, exportingTracks = {}, activeExportId = null;
   function loadMp3Encoder() {
     if (window.lamejs && window.lamejs.Mp3Encoder) return Promise.resolve(window.lamejs);
     if (lamePromise) return lamePromise;
@@ -1365,15 +1369,20 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       return decoder.decodeAudioData(data).then(function (decoded) {
         try { decoder.close(); } catch (e) {}
         var rate = tapeOn ? 1 + (+ui.speed.value) / 100 : 1;
-        var sr = 44100, duration = decoded.duration / rate + (tapeOn ? 0.012 : 0);
-        if (!isFinite(duration) || duration <= 0 || duration > 14400) throw new Error('This track has an unsupported duration.');
+        var sr = 32000, duration = decoded.duration / rate + (tapeOn ? 0.002 : 0);
+        var mobile = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+        var maxDuration = mobile ? 300 : 600;
+        if (!isFinite(duration) || duration <= 0 || duration > maxDuration) throw new Error('For memory safety, MP3 export is limited to ' + (mobile ? '5 minutes on mobile' : '10 minutes on desktop') + ' per track.');
         var OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
         if (!OC) throw new Error('Offline audio rendering is not supported in this browser.');
         var frames = Math.ceil(duration * sr);
+            var estimatedBytes = decoded.length * decoded.numberOfChannels * 4 + frames * 8 + duration * 24000 * 2.2 + 16 * 1024 * 1024;
+        var memoryLimit = mobile ? 160 : 320;
+        if (estimatedBytes > memoryLimit * 1024 * 1024) throw new Error('This track may use too much memory to export safely. Try a shorter track or use desktop.');
         var oc = new OC(2, frames, sr);
         var source = oc.createBufferSource(); source.buffer = decoded; source.playbackRate.value = rate;
         var input = oc.createGain(); input.gain.value = 0.9;
-        var wowDelay = oc.createDelay(0.05); wowDelay.delayTime.value = 0.012;
+        var wowDelay = oc.createDelay(0.05); wowDelay.delayTime.value = 0.001;
         var wowLfo = oc.createOscillator(); wowLfo.type = 'sine';
         var wowDepth = oc.createGain();
         var wow = tapeOn ? (+ui.wow.value) / 100 : 0;
@@ -1408,6 +1417,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   function downloadTrack(id, button) {
     var track = tracks.find(function (t) { return t.id === id; });
     if (!track || exportingTracks[id]) return;
+    if (activeExportId != null) { say('Please wait for the current MP3 export to finish.'); return; }
+    activeExportId = id;
     exportingTracks[id] = true;
     var oldText = button.textContent;
     button.disabled = true; button.textContent = '…'; button.title = 'Rendering processed MP3…';
@@ -1441,7 +1452,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       say('MP3 export failed: ' + (error && error.message ? error.message : 'unknown error') + ' Remote tracks must allow browser access (CORS).');
     }).then(function () {
       exportingTracks[id] = false;
+      activeExportId = null;
       button.disabled = false; button.textContent = oldText; button.title = 'Download processed MP3';
+      if (track.revokeWhenDone) releaseTrackURL(track);
     });
   }
 
@@ -1534,7 +1547,12 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     say('Playlist exported. Local tracks are listed by name; their files may need relinking in other apps.');
   });
   document.querySelectorAll('[data-viz]').forEach(function (b) { b.addEventListener('click', function () { vizMode = b.getAttribute('data-viz'); document.querySelectorAll('[data-viz]').forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); }); saveSettings(); drawViz(); }); });
-  $('#bClear').addEventListener('click', function () { teardown(); tracks = []; curId = null; bag = []; hist = []; showIdleTheme(); setLabels(); renderList(); say('Queue cleared.'); });
+  $('#bClear').addEventListener('click', function () {
+    discardMixDeck(); teardown();
+    tracks.slice().forEach(releaseTrackURL);
+    tracks = []; curId = null; bag = []; hist = [];
+    showIdleTheme(); setLabels(); renderList(); say('Queue cleared.');
+  });
   var playlistPanel = $('.playlist');
   playlistPanel.addEventListener('dragenter', function (e) { if (dragId == null && e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0) { e.preventDefault(); playlistPanel.classList.add('drop-target'); } });
   playlistPanel.addEventListener('dragover', function (e) { if (dragId == null && e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types || [], 'Files') >= 0) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; playlistPanel.classList.add('drop-target'); } });
