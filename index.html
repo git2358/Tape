@@ -73,7 +73,6 @@ body[data-theme="pop"] .cassette svg rect:first-of-type { stroke:var(--edge); }
 .cassette svg rect:nth-of-type(3) { fill:var(--accent); }
 .cassette svg line { stroke:var(--edge); }
 .cassette svg #packL,.cassette svg #packR { fill:var(--tape); }
-.cassette svg #tapeLine { stroke:var(--accent); }
 .cassette svg #hubL > circle:first-child,.cassette svg #hubR > circle:first-child { fill:var(--silver-hi); }
 .cassette svg #hubL > circle:nth-child(2),.cassette svg #hubR > circle:nth-child(2) { fill:var(--shell); }
 body[data-theme="pop"] .cassette svg text, body[data-theme="edm"] .cassette svg text, body[data-theme="hiphop"] .cassette svg text { font-family:"Bungee",sans-serif; }
@@ -255,7 +254,6 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
           <rect x="68" y="74" width="184" height="56" rx="28" fill="#0d0c0b" stroke="#000" stroke-width="1.5"/>
           <circle id="packL" cx="110" cy="102" r="25" fill="#3b2a1f"/>
           <circle id="packR" cx="210" cy="102" r="15" fill="#3b2a1f"/>
-          <line id="tapeLine" x1="110" y1="127" x2="210" y2="117" stroke="#3b2a1f" stroke-width="2.5"/>
           <g id="hubL"><circle cx="110" cy="102" r="13" fill="url(#hubG)"/><circle cx="110" cy="102" r="8.5" fill="#15120f"/>
             <g fill="#f1ede1"><rect x="108.8" y="93.5" width="2.4" height="5"/><rect x="108.8" y="93.5" width="2.4" height="5" transform="rotate(60 110 102)"/><rect x="108.8" y="93.5" width="2.4" height="5" transform="rotate(120 110 102)"/><rect x="108.8" y="93.5" width="2.4" height="5" transform="rotate(180 110 102)"/><rect x="108.8" y="93.5" width="2.4" height="5" transform="rotate(240 110 102)"/><rect x="108.8" y="93.5" width="2.4" height="5" transform="rotate(300 110 102)"/></g></g>
           <g id="hubR"><circle cx="210" cy="102" r="13" fill="url(#hubG)"/><circle cx="210" cy="102" r="8.5" fill="#15120f"/>
@@ -336,7 +334,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
   /* ---------- state ---------- */
   var tracks = [], curId = null, nextId = 1, shuffle = false, repeat = 'off', tapeOn = true;
-  var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic', pendingGenre = '', pendingGenreCount = 0;
+  var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic', trackAnalyzed = false, featureTotals = {bass:0,mid:0,high:0,energy:0};
   var bag = [], hist = [], audio = null, ctx = null, nodes = {}, vizMode = 'spectrum', muted = false, limiterOn = true;
   var needsNativeBackgroundFallback = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var duck = 1, seekDir = 0, seekTimer = null, dragId = null, seeking = false, failStreak = 0;
@@ -500,6 +498,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var t = tracks.find(function (x) { return x.id === id; });
     if (!t) return;
     teardown();
+    resetGenreAnalysis();
     curId = id; bag = bag.filter(function (x) { return x !== id; });
     var a = new Audio(); a.preload = 'auto'; a.playsInline = true; a.setAttribute('playsinline', ''); a.setAttribute('webkit-playsinline', '');
     a.preservesPitch = false; a.mozPreservesPitch = false; a.webkitPreservesPitch = false;
@@ -771,7 +770,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   }
 
   /* ---------- reels and display loop ---------- */
-  var hubL = $('#hubL'), hubR = $('#hubR'), packL = $('#packL'), packR = $('#packR'), tapeLine = $('#tapeLine');
+  var hubL = $('#hubL'), hubR = $('#hubR'), packL = $('#packL'), packR = $('#packR');
   var angL = 0, angR = 0, lastTs = 0;
   var viz = $('#viz'), vctx = viz.getContext('2d');
   var NB = 20, ROWS = 14, SEGS = 38;
@@ -825,17 +824,22 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     C.hi = rootStyle.getPropertyValue('--vfd-hi').trim() || '#dcfff5';
     C.dim = rootStyle.getPropertyValue('--vfd-dim').trim() || '#0f2b27';
   }
+  function resetGenreAnalysis() {
+    detectedGenre = 'generic'; detectedBpm = 0; genreConfidence = 0;
+    lastGenreSample = 0; prevBass = 0; lastBeat = 0; beatIntervals = []; bpmHistory = [];
+    themeSamples = 0; trackAnalyzed = false;
+    featureTotals = {bass:0,mid:0,high:0,energy:0};
+    stableTheme = 'generic';
+    if (themeMode === 'auto') applyTheme('generic');
+  }
   function estimateGenre(ts, playing) {
-    if (!playing || !audio || audio.plain || audio.bypass || !nodes.an || !ctx) {
-      if (!playing) { themeSamples = 0; prevBass = 0; lastBeat = 0; beatIntervals = []; bpmHistory = []; }
-      return;
-    }
+    if (!playing || trackAnalyzed || !audio || audio.plain || audio.bypass || !nodes.an || !ctx) return;
     if (ts - lastGenreSample < 100) return;
     lastGenreSample = ts;
     var an = nodes.an, n = an.frequencyBinCount, sr = ctx.sampleRate, hzPerBin = sr / an.fftSize;
     if (!fbuf || fbuf.length !== n) fbuf = new Uint8Array(n);
     an.getByteFrequencyData(fbuf);
-    var bass=0, mid=0, high=0, total=0, flux=0;
+    var bass=0, mid=0, high=0, total=0;
     for (var i=1;i<n;i++) {
       var hz=i*hzPerBin, v=fbuf[i]/255;
       total+=v;
@@ -843,40 +847,40 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       else if(hz>=150&&hz<2500) mid+=v;
       else if(hz>=2500&&hz<9000) high+=v;
     }
-    var norm=Math.max(0.001,bass+mid+high), b=bass/norm, m=mid/norm, h=high/norm;
+    var norm=Math.max(0.001,bass+mid+high);
+    featureTotals.bass += bass/norm;
+    featureTotals.mid += mid/norm;
+    featureTotals.high += high/norm;
+    featureTotals.energy += Math.min(1,total/Math.max(1,n)*3.6);
     var bassLevel=bass/Math.max(1,Math.floor(115/hzPerBin)-Math.floor(35/hzPerBin));
     var rise=Math.max(0,bassLevel-prevBass); prevBass=bassLevel;
-    if (rise > 0.045 && (!lastBeat || ts-lastBeat > 1800)) { lastBeat = ts; }
+    if (rise > 0.045 && (!lastBeat || ts-lastBeat > 1800)) lastBeat = ts;
     else if (rise > 0.045 && ts-lastBeat > 260) {
       var interval=(ts-lastBeat)/1000;
-      if(interval>=0.27&&interval<=1.5){beatIntervals.push(interval);if(beatIntervals.length>12)beatIntervals.shift();}
+      if(interval>=0.27&&interval<=1.5){beatIntervals.push(interval);if(beatIntervals.length>16)beatIntervals.shift();}
       lastBeat=ts;
     }
-    if(beatIntervals.length>=4){
+    if(beatIntervals.length>=3){
       var sorted=beatIntervals.slice().sort(function(a,b){return a-b;});
-      var med=sorted[Math.floor(sorted.length/2)];
-      var bpm=60/med;
+      var med=sorted[Math.floor(sorted.length/2)], bpm=60/med;
       if(bpm<70)bpm*=2; else if(bpm>160)bpm/=2;
       if(bpm>=65&&bpm<=180){bpmHistory.push(bpm);if(bpmHistory.length>7)bpmHistory.shift();detectedBpm=bpmHistory.reduce(function(a,v){return a+v;},0)/bpmHistory.length;}
     }
     themeSamples++;
-    if(themeSamples<80) return;
-    var energy=Math.min(1,total/Math.max(1,n)*3.6), bpm=detectedBpm;
+    if(themeSamples < 28) return;
+    trackAnalyzed = true;
+    var b=featureTotals.bass/themeSamples, m=featureTotals.mid/themeSamples,
+        h=featureTotals.high/themeSamples, energy=featureTotals.energy/themeSamples, bpm=detectedBpm;
     var candidate='generic', confidence=0;
-    if(bpm>=118&&bpm<=150&&b>0.27&&energy>0.20){candidate='edm';confidence=0.57+(b>0.38?0.08:0);}
+    if(bpm>=118&&b>0.27&&energy>0.20){candidate='edm';confidence=0.58;}
     else if(bpm>=82&&bpm<=112&&m>0.38&&b<0.43){candidate='hiphop';confidence=0.56;}
-    else if(bpm>=65&&bpm<=115&&m>0.35&&h<0.24&&b<0.38){candidate='jazz';confidence=0.54;}
-    else if(bpm>=105&&bpm<=155&&m>0.34&&energy>0.19&&h>0.13){candidate='rock';confidence=0.56+(h>0.22?0.05:0);}
-    else if(bpm>=90&&bpm<=145&&h>0.16&&energy>0.16){candidate='pop';confidence=0.56;}
-    else if(bpm>=75&&bpm<=150&&h>0.13&&b<0.38){candidate='retro';confidence=0.52;}
-    if (confidence < 0.55) candidate = 'generic';
-    if (candidate === pendingGenre) pendingGenreCount++;
-    else { pendingGenre = candidate; pendingGenreCount = 1; }
-    if (pendingGenreCount >= 6) {
-      stableTheme = pendingGenre;
-      detectedGenre = stableTheme;
-      genreConfidence = stableTheme === 'generic' ? 0 : confidence;
-    }
+    else if(bpm>=65&&bpm<=115&&m>0.35&&h<0.24&&b<0.38){candidate='jazz';confidence=0.55;}
+    else if(bpm>=105&&bpm<=165&&m>0.30&&energy>0.16&&h>0.13){candidate='rock';confidence=0.57;}
+    else if(bpm>=90&&bpm<=150&&h>0.16&&energy>0.15){candidate='pop';confidence=0.56;}
+    else if(bpm>=75&&bpm<=150&&h>0.13&&b<0.38){candidate='retro';confidence=0.55;}
+    detectedGenre = confidence >= 0.55 ? candidate : 'generic';
+    genreConfidence = detectedGenre === 'generic' ? 0 : confidence;
+    stableTheme = detectedGenre;
     if (themeMode === 'auto') applyTheme(stableTheme);
   }
   function drawViz() {
@@ -945,7 +949,6 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     hubL.setAttribute('transform', 'rotate(' + angL.toFixed(2) + ' 110 102)');
     hubR.setAttribute('transform', 'rotate(' + angR.toFixed(2) + ' 210 102)');
     packL.setAttribute('r', rs.toFixed(2)); packR.setAttribute('r', rt.toFixed(2));
-    tapeLine.setAttribute('y1', (102 + rs).toFixed(2)); tapeLine.setAttribute('y2', (102 + rt).toFixed(2));
 
     /* Avoid frequent playbackRate writes on iOS: they can cause audible dropouts/stutter.
        Preserve normal tape speed and the other effects; fast-forward remains temporary. */
