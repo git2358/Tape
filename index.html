@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{position:relative;margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <title>Cassette Walkman</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -342,13 +342,13 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var id = window.crypto && typeof window.crypto.randomUUID === 'function' ? window.crypto.randomUUID().replace(/-/g, '') : (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
     return (stamp + id).slice(0, 32);
   }());
+  var $ = function (s) { return document.querySelector(s); };
   function updateVersionFooter() {
     var d = new Date(), pad = function (n) { return String(n).padStart(2, '0'); };
     $('#versionFooter').textContent = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + ' · ' + versionStamp;
   }
   updateVersionFooter();
   window.setInterval(updateVersionFooter, 1000);
-  var $ = function (s) { return document.querySelector(s); };
   var ui = {};
   ['speed', 'warm', 'clar', 'cut', 'sat', 'wow', 'hiss', 'vol', 'seek'].forEach(function (id) { ui[id] = $('#' + id); });
   var calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
