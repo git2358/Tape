@@ -2,7 +2,7 @@
 <title>Cassette Walkman</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500&family=Barlow+Condensed:wght@500;600&family=Caveat:wght@600&family=VT323&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow:wght@400;500&family=Barlow+Condensed:wght@500;600&family=Bungee&family=Caveat:wght@600&family=Orbitron:wght@400;600;700&family=Playfair+Display:wght@500;600&family=VT323&display=swap">
 <style>
 /* Layout: VFD display, cassette bay and transport on the left; playlist beside them. Stacks on phones. */
 :root {
@@ -57,6 +57,31 @@ h1 span { color: var(--accent); }
   .grid { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); grid-template-areas: "cas vfd" "tra tone" "pl tone"; align-items: start; }
 }
 .vfd { grid-area: vfd; } .bay { grid-area: cas; } .transport { grid-area: tra; } .tone { grid-area: tone; } .playlist { grid-area: pl; }
+.theme-tools { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; margin:0 0 16px; padding:10px 12px; border:1px solid var(--edge); border-radius:8px; background:var(--panel); color:var(--ink); font-family:var(--font-body); }
+.theme-tools label { display:flex; flex-wrap:wrap; align-items:center; gap:8px; font:500 12px var(--font-ui); letter-spacing:.12em; text-transform:uppercase; color:var(--ink-dim); }
+.theme-tools select { max-width:100%; padding:7px 9px; border:1px solid var(--edge); border-radius:4px; background:var(--panel-2); color:var(--ink); font:500 14px var(--font-body); }
+#genreReadout { font:18px var(--font-vfd); color:var(--vfd); letter-spacing:.04em; }
+body[data-theme="pop"] { --room:#160d2c;--panel:#281044;--panel-2:#39145a;--edge:#ff4fa3;--ink:#fff4fb;--ink-dim:#f1a7d1;--accent:#ff3caa;--accent-hi:#ffeb54;--vfd:#75f7ff;--vfd-hi:#ffffff;--vfd-dim:#163a65;--glass:#080d27;--paper:#ffedfb;--tape:#7e2ba0;--shell:#ff4fa3;--font-ui:"Bungee",sans-serif;--font-body:"Barlow",sans-serif; }
+body[data-theme="rock"] { --room:#100f10;--panel:#1c1b1d;--panel-2:#29272a;--edge:#a72732;--ink:#f4eeee;--ink-dim:#b9aeb0;--accent:#e32836;--accent-hi:#ff5b54;--vfd:#ff4848;--vfd-hi:#ffd0c8;--vfd-dim:#481518;--glass:#100607;--paper:#d7d0ca;--tape:#8c1c25;--shell:#211f22;--font-ui:"Anton",sans-serif;--font-body:"Barlow Condensed",sans-serif; }
+body[data-theme="edm"] { --room:#07131d;--panel:#0e2434;--panel-2:#12384a;--edge:#22e7d3;--ink:#e5ffff;--ink-dim:#8ebfc9;--accent:#b5ff00;--accent-hi:#f5ff70;--vfd:#30f7ff;--vfd-hi:#ffffff;--vfd-dim:#123b4b;--glass:#020b14;--paper:#d4fff5;--tape:#6a2fff;--shell:#112e48;--font-ui:"Orbitron",sans-serif;--font-body:"Barlow",sans-serif; }
+body[data-theme="hiphop"] { --room:#17101c;--panel:#26182b;--panel-2:#38213b;--edge:#d6a849;--ink:#fff4d6;--ink-dim:#c5a8ba;--accent:#e5b64d;--accent-hi:#ffdf7c;--vfd:#e8c5ff;--vfd-hi:#fff4d6;--vfd-dim:#3c2547;--glass:#100b16;--paper:#f2dfad;--tape:#6c3477;--shell:#332039;--font-ui:"Bungee",sans-serif;--font-body:"Barlow Condensed",sans-serif; }
+body[data-theme="jazz"] { --room:#211419;--panel:#382027;--panel-2:#4a2a30;--edge:#b88a50;--ink:#fff0d7;--ink-dim:#c9a99a;--accent:#c39a5b;--accent-hi:#f0d39a;--vfd:#d9d7a4;--vfd-hi:#fff6d6;--vfd-dim:#34321b;--glass:#100c0b;--paper:#f0dfbd;--tape:#6b2937;--shell:#4a2b2a;--font-ui:"Playfair Display",serif;--font-body:"Barlow",sans-serif; }
+body[data-theme="retro"] { --room:#19131b;--panel:#2a202e;--panel-2:#3c2a3d;--edge:#e17845;--ink:#fff0d9;--ink-dim:#c7a7a0;--accent:#ff814a;--accent-hi:#ffd166;--vfd:#64f5ce;--vfd-hi:#e4fff4;--vfd-dim:#17443c;--glass:#080d12;--paper:#f5d9b5;--tape:#b94c47;--shell:#382b38;--font-ui:"Orbitron",sans-serif;--font-body:"Barlow Condensed",sans-serif; }
+body[data-theme="generic"] { --font-ui:"Barlow Condensed",sans-serif;--font-body:"Barlow",system-ui,sans-serif; }
+body[data-theme="pop"] .cassette svg rect:first-of-type { stroke:var(--edge); }
+.cassette svg rect:nth-of-type(2) { fill:var(--paper); }
+.cassette svg rect:nth-of-type(3) { fill:var(--accent); }
+.cassette svg line { stroke:var(--edge); }
+.cassette svg #packL,.cassette svg #packR { fill:var(--tape); }
+.cassette svg #tapeLine { stroke:var(--accent); }
+.cassette svg #hubL > circle:first-child,.cassette svg #hubR > circle:first-child { fill:var(--silver-hi); }
+.cassette svg #hubL > circle:nth-child(2),.cassette svg #hubR > circle:nth-child(2) { fill:var(--shell); }
+body[data-theme="pop"] .cassette svg text, body[data-theme="edm"] .cassette svg text, body[data-theme="hiphop"] .cassette svg text { font-family:"Bungee",sans-serif; }
+body[data-theme="rock"] .cassette svg text { font-family:"Anton",sans-serif; }
+body[data-theme="jazz"] .cassette svg text { font-family:"Playfair Display",serif; }
+body[data-theme="edm"] .panel,body[data-theme="pop"] .panel { box-shadow:inset 0 1px 0 #ffffff18,0 0 20px color-mix(in srgb,var(--accent) 14%,transparent); }
+body[data-theme="rock"] .panel { box-shadow:inset 0 1px 0 #ffffff10,0 10px 30px #0009; }
+
 
 .panel {
   background: linear-gradient(var(--panel-2), var(--panel));
@@ -191,6 +216,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     <div class="spec">Stereo cassette player · Type I · 120 µs EQ</div>
   </header>
 
+  <div class="theme-tools"><label for="themeSelect">Cassette theme <select id="themeSelect"><option value="auto">Auto detect</option><option value="generic">Generic / unknown</option><option value="pop">Pop · Neon 90s</option><option value="rock">Rock / Metal</option><option value="edm">EDM / Dance</option><option value="hiphop">Hip-hop / R&amp;B</option><option value="jazz">Jazz / Soul</option><option value="retro">Synth-pop / Retro</option></select></label><span id="genreReadout" aria-live="polite">GENRE -- · BPM --</span></div>
   <div class="grid">
     <section class="panel vfd" aria-label="Display">
       <div class="vfd-glass">
@@ -306,6 +332,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
   /* ---------- state ---------- */
   var tracks = [], curId = null, nextId = 1, shuffle = false, repeat = 'off', tapeOn = true;
+  var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, beatEnergy = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic';
   var bag = [], hist = [], audio = null, ctx = null, nodes = {}, vizMode = 'spectrum', muted = false, limiterOn = true;
   var needsNativeBackgroundFallback = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var duck = 1, seekDir = 0, seekTimer = null, dragId = null, seeking = false, failStreak = 0;
@@ -319,7 +346,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   /* ---------- settings ---------- */
   function saveSettings() {
     try {
-      var o = { tapeOn: tapeOn, shuffle: shuffle, repeat: repeat, muted: muted, vizMode: vizMode, limiterOn: limiterOn };
+      var o = { tapeOn: tapeOn, shuffle: shuffle, repeat: repeat, muted: muted, vizMode: vizMode, limiterOn: limiterOn, themeMode: themeMode };
       Object.keys(ui).forEach(function (k) { if (k !== 'seek') o[k] = ui[k].value; });
       localStorage.setItem('cassette-walkman', JSON.stringify(o));
     } catch (e) {}
@@ -329,7 +356,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       var o = JSON.parse(localStorage.getItem('cassette-walkman') || 'null');
       if (!o) return;
       Object.keys(ui).forEach(function (k) { if (k !== 'seek' && o[k] != null) ui[k].value = o[k]; });
-      tapeOn = o.tapeOn !== false; shuffle = !!o.shuffle; repeat = o.repeat || 'off'; muted = !!o.muted; vizMode = o.vizMode || 'spectrum'; limiterOn = o.limiterOn !== false;
+      tapeOn = o.tapeOn !== false; shuffle = !!o.shuffle; repeat = o.repeat || 'off'; muted = !!o.muted; vizMode = o.vizMode || 'spectrum'; limiterOn = o.limiterOn !== false; themeMode = o.themeMode || 'auto';
     } catch (e) {}
   }
 
@@ -782,6 +809,65 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     lvlL = l > lvlL ? l : Math.max(l, lvlL - dt * 2.8); lvlR = r > lvlR ? r : Math.max(r, lvlR - dt * 2.8);
     pkL = Math.max(lvlL, pkL - dt * 1.1); pkR = Math.max(lvlR, pkR - dt * 1.1);
   }
+  function applyTheme(theme) {
+    var t = theme || 'generic';
+    document.body.setAttribute('data-theme', t);
+    $('#themeSelect').value = themeMode;
+    var names = {generic:'GENERIC',pop:'POP',rock:'ROCK',edm:'EDM',hiphop:'HIP-HOP',jazz:'JAZZ / SOUL',retro:'RETRO'};
+    var genre = themeMode === 'auto' ? (t === 'generic' ? 'UNKNOWN' : names[t]) : names[t] || 'GENERIC';
+    $('#genreReadout').textContent = genre + ' · BPM ' + (detectedBpm ? Math.round(detectedBpm) : '--');
+    var rootStyle = getComputedStyle(document.body);
+    C.on = rootStyle.getPropertyValue('--vfd').trim() || '#6bf5d3';
+    C.hi = rootStyle.getPropertyValue('--vfd-hi').trim() || '#dcfff5';
+    C.dim = rootStyle.getPropertyValue('--vfd-dim').trim() || '#0f2b27';
+  }
+  function estimateGenre(ts, playing) {
+    if (!playing || !audio || audio.plain || audio.bypass || !nodes.an || !ctx) {
+      if (!playing) { themeSamples = 0; prevBass = 0; lastBeat = 0; beatIntervals = []; bpmHistory = []; }
+      return;
+    }
+    if (ts - lastGenreSample < 100) return;
+    lastGenreSample = ts;
+    var an = nodes.an, n = an.frequencyBinCount, sr = ctx.sampleRate, hzPerBin = sr / an.fftSize;
+    if (!fbuf || fbuf.length !== n) fbuf = new Uint8Array(n);
+    an.getByteFrequencyData(fbuf);
+    var bass=0, mid=0, high=0, total=0, flux=0;
+    for (var i=1;i<n;i++) {
+      var hz=i*hzPerBin, v=fbuf[i]/255;
+      total+=v;
+      if(hz>=35&&hz<150) bass+=v;
+      else if(hz>=150&&hz<2500) mid+=v;
+      else if(hz>=2500&&hz<9000) high+=v;
+    }
+    var norm=Math.max(0.001,bass+mid+high), b=bass/norm, m=mid/norm, h=high/norm;
+    var bassLevel=bass/Math.max(1,Math.floor(115/hzPerBin)-Math.floor(35/hzPerBin));
+    var rise=Math.max(0,bassLevel-prevBass); prevBass=bassLevel;
+    if(rise>0.045 && (!lastBeat || ts-lastBeat>260) && ts-lastBeat<1800){
+      var interval=(ts-lastBeat)/1000;
+      if(interval>=0.27&&interval<=1.5){beatIntervals.push(interval);if(beatIntervals.length>12)beatIntervals.shift();}
+      lastBeat=ts;
+    } else if (!lastBeat && rise>0.045) lastBeat=ts;
+    if(beatIntervals.length>=4){
+      var sorted=beatIntervals.slice().sort(function(a,b){return a-b;});
+      var med=sorted[Math.floor(sorted.length/2)];
+      var bpm=60/med;
+      if(bpm<70)bpm*=2; else if(bpm>160)bpm/=2;
+      if(bpm>=65&&bpm<=180){bpmHistory.push(bpm);if(bpmHistory.length>7)bpmHistory.shift();detectedBpm=bpmHistory.reduce(function(a,v){return a+v;},0)/bpmHistory.length;}
+    }
+    themeSamples++;
+    if(themeSamples<80) return;
+    var energy=Math.min(1,total/Math.max(1,n)*3.6), bpm=detectedBpm;
+    var candidate='generic', confidence=0;
+    if(bpm>=118&&bpm<=150&&b>0.27&&energy>0.20){candidate='edm';confidence=0.57+(b>0.38?0.08:0);}
+    else if(bpm>=82&&bpm<=112&&m>0.38&&b<0.43){candidate='hiphop';confidence=0.56;}
+    else if(bpm>=65&&bpm<=115&&m>0.35&&h<0.24&&b<0.38){candidate='jazz';confidence=0.54;}
+    else if(bpm>=105&&bpm<=155&&m>0.34&&energy>0.19&&h>0.13){candidate='rock';confidence=0.56+(h>0.22?0.05:0);}
+    else if(bpm>=90&&bpm<=145&&h>0.16&&energy>0.16){candidate='pop';confidence=0.56;}
+    else if(bpm>=75&&bpm<=150&&h>0.13&&b<0.38){candidate='retro';confidence=0.52;}
+    if(candidate==='generic'||confidence<0.55){detectedGenre='generic';genreConfidence=0;stableTheme='generic';}
+    else {detectedGenre=candidate;genreConfidence=confidence;stableTheme=candidate;}
+    if(themeMode==='auto') applyTheme(stableTheme);
+  }
   function drawViz() {
     var dpr = Math.min(window.devicePixelRatio || 1, 2), W = viz.clientWidth, H = viz.clientHeight;
     if (!W || !H) return;
@@ -838,6 +924,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   function frame(ts) {
     var dt = Math.min(0.1, (ts - lastTs) / 1000 || 0.016); lastTs = ts;
     var a = audio && audio.a, playing = !!a && !a.paused && !a.ended;
+    estimateGenre(ts, playing);
     var dur = a && isFinite(a.duration) ? a.duration : 0, now = a ? a.currentTime : 0;
     var p = dur ? Math.min(1, now / dur) : 0;
     var rs = lerp(25, 15, p), rt = lerp(15, 25, p);
@@ -1071,7 +1158,10 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   window.addEventListener('pageshow', function () { if (!document.hidden) switchToEffectsAudio(); });
 
   /* ---------- start ---------- */
-  loadSettings(); applyTape(); updateChips(); setLabels(); renderList();
+  loadSettings();
+  $('#themeSelect').value = themeMode;
+  applyTheme(themeMode === 'auto' ? 'generic' : themeMode);
+  $('#themeSelect').addEventListener('change', function () { themeMode = this.value; if (themeMode === 'auto') applyTheme(detectedGenre); else applyTheme(themeMode); saveSettings(); }); applyTape(); updateChips(); setLabels(); renderList();
   document.querySelectorAll('[data-viz]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-viz') === vizMode)); });
   setVol();
   requestAnimationFrame(frame);
