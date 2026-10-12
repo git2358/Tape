@@ -945,7 +945,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
           if(speechScore>=.70&&speechGate){genre='voice';confidence=speechScore;}
           else if(voice>=.70&&best.score<.72&&mid>=.42&&bass<=.38&&beat<.48&&regularity<.70&&flux<.80&&onset<.68){genre='voice';confidence=voice;}
           else if(best.score>=.53&&margin>=.055){genre=best.genre;confidence=Math.min(.99,best.score);}
-          if(segN>=2) {
+          if(segN>=2&&genre!=='generic') {
             detectedGenre=genre; stableTheme=genre; genreConfidence=confidence;
             if(bpmAvg)detectedBpm=bpmAvg;
             trackAnalyzed=true;
@@ -959,7 +959,6 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   }
   function estimateGenre(ts, playing) {
     if (!playing || !audio || audio.plain || audio.bypass || !nodes.an || !ctx) return;
-    if (genreSegments.length >= 12) genreSegments = genreSegments.slice(-8);
     if (ts - lastGenreSample < 100) return;
     lastGenreSample = ts;
     var an = nodes.an, n = an.frequencyBinCount, sr = ctx.sampleRate, hzPerBin = sr / an.fftSize;
@@ -1048,11 +1047,11 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     };
     var ranked=Object.keys(scores).map(function(k){return {genre:k,score:scores[k]};}).sort(function(a,b){return b.score-a.score;});
     var best=ranked[0],margin=best.score-ranked[1].score;
-    if(genreSegments.length<2) return;
+    if(genreSegments.length<6) return;
     var voiceEvidence=Math.min(1,Math.max(0,(mid-0.34)*2.3))*0.34+(1-Math.min(1,bass/0.38))*0.16+(1-Math.min(1,beatStrength/0.65))*0.18+(1-Math.min(1,regularity/0.65))*0.14+(1-Math.min(1,flux/0.8))*0.10+(1-onset)*0.08;
     var proposed='';
     if(voiceEvidence>=0.70&&best.score<0.72&&mid>=0.42&&bass<=0.38&&beatStrength<0.48&&regularity<0.70&&flux<0.80&&onset<0.68) proposed='voice';
-    else if(genreSegments.length<4 ? best.score>=0.66&&margin>=0.14 : best.score>=0.53&&margin>=0.055) proposed=best.genre;
+    else if(best.score>=0.43&&margin>=0.025) proposed=best.genre;
     /* Confirm a winner twice; require both a credible score and separation from runner-up. */
     if(proposed) {
       if(proposed===candidateGenre) candidateGenreWins++;
@@ -1065,7 +1064,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     stableTheme=detectedGenre;
     if(themeMode==='auto'&&detectedGenre!=='generic') applyTheme(stableTheme);
     trackAnalyzed=detectedGenre!=='generic';
-    if(genreSegments.length>=12) genreSegments=genreSegments.slice(-8);
+    if(genreSegments.length>30) genreSegments=genreSegments.slice(-24);
   }
   function drawViz() {
     var dpr = Math.min(window.devicePixelRatio || 1, 2), W = viz.clientWidth, H = viz.clientHeight;
