@@ -251,12 +251,13 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
         <button class="mode" id="mShuf" aria-pressed="false"><i></i>Shuffle</button>
         <button class="mode" id="mRep" aria-pressed="false"><i></i><span id="mRepT">Repeat off</span></button>
         <button class="mode" id="mTape" aria-pressed="true"><i></i>Tape sound</button>
+        <button class="mode" id="mLimiter" aria-pressed="true"><i></i>Auto volume limiter ON</button>
       </div>
     </section>
 
     <section class="panel tone" aria-label="Tape sound">
       <div class="tone-head"><h2>Tape sound</h2><span class="label">Varispeed + EQ + saturation</span></div>
-      <div class="modes"><button class="mode" id="mLimiter" aria-pressed="true"><i></i>Auto volume limiter ON</button><span id="limiterReadout" class="label" aria-live="polite">LIMITER ON · standing by</span><button class="btn reset" type="button" id="resetAll">Reset all sliders</button></div>
+      <div class="modes"><span id="limiterReadout" class="label" aria-live="polite">LIMITER ON · standing by</span><button class="btn reset" type="button" id="resetAll">Reset all sliders</button></div>
       <div class="faders">
         <label class="fader"><span class="label">Speed</span><input type="range" id="speed" min="0" max="6" step="0.1" value="3"><output id="oSpeed"></output><button class="btn reset" type="button" data-reset="speed" aria-label="Reset speed">Reset</button></label>
         <label class="fader"><span class="label">Warmth</span><input type="range" id="warm" min="0" max="6" step="0.5" value="2"><output id="oWarm"></output><button class="btn reset" type="button" data-reset="warm" aria-label="Reset warmth">Reset</button></label>
