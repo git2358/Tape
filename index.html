@@ -562,7 +562,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     a.addEventListener('loadedmetadata', function () { if (isFinite(a.duration) && a.duration > 0) { t.dur = a.duration; if (mixOn && audio && audio.a === a && a.currentTime < a.duration * 0.2) { try { a.currentTime = a.duration * 0.2; } catch (e) {} } renderList(); } });
     a.addEventListener('playing', function () { updateHiss(); failStreak = 0; if ('mediaSession' in navigator && audio && audio.a === a) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} } });
     a.addEventListener('pause', function () { updateHiss(); if ('mediaSession' in navigator && audio && audio.a === a && (!audio.bgA || audio.bgA.paused)) { try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {} } });
-    a.addEventListener('ended', function () { updateHiss(); if (audio && audio.a === a) next(true); });
+    a.addEventListener('ended', function () { updateHiss(); if (audio && audio.a === a && !(mixOn && mixTransition)) next(true); });
     a.addEventListener('error', function () {
       if (!audio || audio.fxA !== a) return;
       if (remote && !plain) { say('That server blocks tape processing. Playing without the effect.'); t.plain = true; playId(id, autoplay, true, true); return; }
@@ -717,19 +717,17 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     }
     var fade = Math.min(10, Math.max(4, dur * 0.06));
     var start = end - fade;
-    if (now >= Math.max(dur * 0.2, start - fade * 1.5) && !mixDeck) {
+    /* Load the next track early, not just seconds before the fade. Remote streams
+       may need time to download, seek to 20%, and become playable. */
+    if (now >= dur * 0.2 && !mixDeck) {
       var id = chooseMixNextId();
       if (id != null) prepareMixDeck(id);
     }
-    if (mixDeck && mixDeck.ready && now >= start) beginMixTransition(Math.min(fade, Math.max(0.5, end - now)));
-    if (!mixDeck && now >= end && !mixEndScheduled) {
-      mixEndScheduled = true;
-      if (audio.mixGain && ctx) {
-        audio.mixGain.gain.cancelScheduledValues(ctx.currentTime);
-        audio.mixGain.gain.setTargetAtTime(0, ctx.currentTime, 0.2);
-      }
-      setTimeout(function () { if (mixOn && audio && audio.a.currentTime >= end) { if (!audio.mixGain) next(true); else stopAtEnd(); } }, 900);
+    if (mixDeck && mixDeck.ready && now >= start) {
+      beginMixTransition(Math.min(fade, Math.max(1, end - now)));
     }
+    /* If the next source is slow, let this track continue naturally rather than
+       muting/stopping it at 80%, which creates an audible pause. */
   }
 
   function next(auto) {
