@@ -639,12 +639,33 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     try {
       var node = ctx.createMediaElementSource(a), gain = ctx.createGain();
       gain.gain.value = 0; node.connect(gain); gain.connect(tapeOn ? nodes.input : nodes.comp);
+      var targetTime = 0, metadataReady = false, seekReady = false, dataReady = false;
       mixDeck = { id:id, a:a, node:node, gain:gain, ready:false };
+      function updateMixDeckReady() {
+        if (!mixDeck || mixDeck.a !== a || !metadataReady || !seekReady || !dataReady) return;
+        if (Math.abs(a.currentTime - targetTime) > 0.75 || a.readyState < 2) return;
+        mixDeck.ready = true;
+      }
       a.addEventListener('loadedmetadata', function () {
         if (!mixDeck || mixDeck.a !== a || !isFinite(a.duration) || a.duration <= 0) return;
         t.dur = a.duration;
-        try { a.currentTime = a.duration * 0.2; } catch (e) {}
-        mixDeck.ready = true;
+        targetTime = a.duration * 0.2;
+        metadataReady = true;
+        try {
+          a.currentTime = targetTime;
+          if (Math.abs(a.currentTime - targetTime) <= 0.75 && !a.seeking) seekReady = true;
+        } catch (e) {}
+        updateMixDeckReady();
+      });
+      a.addEventListener('seeked', function () {
+        if (!mixDeck || mixDeck.a !== a) return;
+        seekReady = Math.abs(a.currentTime - targetTime) <= 0.75;
+        updateMixDeckReady();
+      });
+      a.addEventListener('canplay', function () {
+        if (!mixDeck || mixDeck.a !== a) return;
+        dataReady = true;
+        updateMixDeckReady();
       });
       a.addEventListener('error', function () {
         if (mixDeck && mixDeck.a === a) { discardMixDeck(); say('Mix could not load the next track; continuing without overlap.'); }
