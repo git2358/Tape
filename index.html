@@ -214,6 +214,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
 @media (prefers-reduced-motion: reduce) { .marquee.run span { animation: none; } .marquee { text-overflow: ellipsis; } }
 @media (max-width: 420px) { .key { height: 48px; } .key svg { width: 19px; height: 19px; } h1 { font-size: 25px; } }
+.version { position:absolute; bottom:10px; left:50%; transform:translateX(-50%); width:max-content; max-width:calc(100vw - 24px); overflow-wrap:anywhere; text-align:center; font:.5rem/1.4 monospace; color:#fff; mix-blend-mode:difference; z-index:9999; pointer-events:none; }
+@media (min-width:768px) { .version { position:fixed; } }
 </style>
 
 <div class="wrap" id="app">
@@ -327,9 +329,24 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   </div>
 </div>
 
+<footer class="version" id="versionFooter" aria-label="Local date, time and version"></footer>
+
 <script>
 (function () {
   'use strict';
+
+  var versionStamp = (function () {
+    var d = new Date();
+    var stamp = String(d.getFullYear() + d.getMonth() + 1 + d.getDate() + d.getHours() + d.getMinutes() + d.getSeconds() + d.getMilliseconds());
+    var id = window.crypto && typeof window.crypto.randomUUID === 'function' ? window.crypto.randomUUID().replace(/-/g, '') : (Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2));
+    return (stamp + id).slice(0, 32);
+  }());
+  function updateVersionFooter() {
+    var d = new Date(), pad = function (n) { return String(n).padStart(2, '0'); };
+    $('#versionFooter').textContent = d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()) + ':' + pad(d.getSeconds()) + ' · ' + versionStamp;
+  }
+  updateVersionFooter();
+  window.setInterval(updateVersionFooter, 1000);
   var $ = function (s) { return document.querySelector(s); };
   var ui = {};
   ['speed', 'warm', 'clar', 'cut', 'sat', 'wow', 'hiss', 'vol', 'seek'].forEach(function (id) { ui[id] = $('#' + id); });
@@ -337,7 +354,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
   /* ---------- state ---------- */
   var tracks = [], curId = null, nextId = 1, shuffle = false, repeat = 'off', tapeOn = true;
-  var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic', trackAnalyzed = false, genreSegments = [], segmentTotals = {bass:0,mid:0,high:0,energy:0}, featureTotals = {bass:0,mid:0,high:0,energy:0};
+  var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic', trackAnalyzed = false, genreSegments = [], segmentTotals = {bass:0,mid:0,high:0,energy:0,spectralFlux:0,beatStrength:0,lowTransient:0,harmonicity:0,onsets:0}, featureTotals = {bass:0,mid:0,high:0,energy:0}, prevSpectrum = null, fluxHistory = [], lastOnset = 0;
   var bag = [], hist = [], audio = null, ctx = null, nodes = {}, vizMode = 'spectrum', muted = false, limiterOn = true;
   var needsNativeBackgroundFallback = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var duck = 1, seekDir = 0, seekTimer = null, dragId = null, seeking = false, failStreak = 0;
@@ -833,7 +850,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     detectedGenre = 'generic'; detectedBpm = 0; genreConfidence = 0;
     lastGenreSample = 0; prevBass = 0; lastBeat = 0; beatIntervals = []; bpmHistory = [];
     themeSamples = 0; trackAnalyzed = false; genreSegments = [];
-    segmentTotals = {bass:0,mid:0,high:0,energy:0}; featureTotals = {bass:0,mid:0,high:0,energy:0};
+    segmentTotals = {bass:0,mid:0,high:0,energy:0,spectralFlux:0,beatStrength:0,lowTransient:0,harmonicity:0,onsets:0};
+    featureTotals = {bass:0,mid:0,high:0,energy:0}; prevSpectrum = null; fluxHistory = []; lastOnset = 0;
     stableTheme = 'generic';
     if (themeMode === 'auto') applyTheme('generic');
   }
@@ -854,10 +872,25 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     }
     var norm=Math.max(0.001,bass+mid+high);
     var bassFeature=bass/norm, midFeature=mid/norm, highFeature=high/norm, energyFeature=Math.min(1,total/Math.max(1,n)*3.6);
+    var flux=0, peakEnergy=0;
+    if (prevSpectrum && prevSpectrum.length===n) {
+      for (var j=1;j<n;j++) { var current=fbuf[j]/255, previous=prevSpectrum[j]/255; if(current>previous) flux += current-previous; }
+      flux /= Math.max(1,n-1);
+    }
+    prevSpectrum = new Uint8Array(fbuf);
+    fluxHistory.push(flux); if(fluxHistory.length>30) fluxHistory.shift();
+    var fluxMean=fluxHistory.reduce(function(a,v){return a+v;},0)/Math.max(1,fluxHistory.length);
+    var onset = flux > Math.max(0.012, fluxMean*1.55) && ts-lastOnset>180;
+    if(onset) lastOnset=ts;
+    for (var p=2;p<n-2;p++) { var pv=fbuf[p]; if(pv>fbuf[p-1] && pv>=fbuf[p+1] && pv>32) peakEnergy+=pv; }
+    var harmonicity=Math.min(1, peakEnergy/Math.max(1,total*255)*0.8);
     featureTotals.bass += bassFeature; featureTotals.mid += midFeature; featureTotals.high += highFeature; featureTotals.energy += energyFeature;
     segmentTotals.bass += bassFeature; segmentTotals.mid += midFeature; segmentTotals.high += highFeature; segmentTotals.energy += energyFeature;
+    segmentTotals.spectralFlux += flux; segmentTotals.beatStrength += Math.min(1,flux*18); segmentTotals.harmonicity += harmonicity;
+    if(onset) segmentTotals.onsets++;
     var bassLevel=bass/Math.max(1,Math.floor(115/hzPerBin)-Math.floor(35/hzPerBin));
     var rise=Math.max(0,bassLevel-prevBass); prevBass=bassLevel;
+    var lowTransient=Math.min(1,rise/0.075); segmentTotals.lowTransient += lowTransient;
     if (rise > 0.045 && (!lastBeat || ts-lastBeat > 1800)) lastBeat = ts;
     else if (rise > 0.045 && ts-lastBeat > 260) {
       var interval=(ts-lastBeat)/1000;
@@ -873,15 +906,15 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     themeSamples++;
     if(themeSamples % 20 !== 0) return;
     var seg = {
-      bass: segmentTotals.bass/20,
-      mid: segmentTotals.mid/20,
-      high: segmentTotals.high/20,
-      energy: segmentTotals.energy/20,
+      bass: segmentTotals.bass/20, mid: segmentTotals.mid/20, high: segmentTotals.high/20,
+      energy: segmentTotals.energy/20, spectralFlux: segmentTotals.spectralFlux/20,
+      beatStrength: segmentTotals.beatStrength/20, lowTransient: segmentTotals.lowTransient/20,
+      harmonicity: segmentTotals.harmonicity/20, onsetDensity: Math.min(1,segmentTotals.onsets/5),
       bpm: detectedBpm
     };
     genreSegments.push(seg);
-    segmentTotals = {bass:0,mid:0,high:0,energy:0};
-    var avg = {bass:0,mid:0,high:0,energy:0,bpm:0};
+    segmentTotals = {bass:0,mid:0,high:0,energy:0,spectralFlux:0,beatStrength:0,lowTransient:0,harmonicity:0,onsets:0};
+    var avg = {bass:0,mid:0,high:0,energy:0,spectralFlux:0,beatStrength:0,lowTransient:0,harmonicity:0,onsetDensity:0,bpm:0};
     genreSegments.forEach(function(x){Object.keys(avg).forEach(function(k){avg[k]+=x[k]||0;});});
     Object.keys(avg).forEach(function(k){avg[k]/=genreSegments.length;});
     var intervals=beatIntervals.slice(), regularity=0;
@@ -897,15 +930,18 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       return Math.max(0,1-d/soft);
     }
     var tempoDance=fit(avg.bpm,118,150,38), tempoHip=fit(avg.bpm,76,112,32),
-        tempoRock=fit(avg.bpm,100,165,35), tempoPop=fit(avg.bpm,88,150,35),
-        bass=avg.bass, mid=avg.mid, high=avg.high, energy=avg.energy;
+        tempoRock=fit(avg.bpm,100,165,35), tempoPop=fit(avg.bpm,88,150,35);
+    var bass=avg.bass, mid=avg.mid, high=avg.high, energy=avg.energy,
+        flux=Math.min(1,avg.spectralFlux/0.045), onset=Math.min(1,avg.onsetDensity),
+        beatStrength=Math.min(1,avg.beatStrength/0.28), transient=Math.min(1,avg.lowTransient/0.18),
+        harmonicity=Math.min(1,avg.harmonicity/0.42);
     var scores={
-      edm:0.27*tempoDance+0.18*Math.min(1,bass/0.34)+0.17*Math.min(1,energy/0.28)+0.14*Math.min(1,high/0.24)+0.24*regularity,
-      hiphop:0.28*tempoHip+0.24*Math.min(1,bass/0.36)+0.23*Math.min(1,mid/0.44)+0.13*(1-Math.min(1,high/0.36))+0.12*(1-regularity),
-      jazz:0.28*fit(avg.bpm,65,115,30)+0.28*Math.min(1,mid/0.44)+0.24*(1-Math.min(1,high/0.3))+0.20*(1-Math.min(1,energy/0.32)),
-      rock:0.28*tempoRock+0.24*Math.min(1,mid/0.42)+0.23*Math.min(1,high/0.27)+0.25*Math.min(1,energy/0.28),
-      pop:0.28*tempoPop+0.22*Math.min(1,high/0.25)+0.22*Math.min(1,energy/0.27)+0.16*Math.min(1,mid/0.42)+0.12*regularity,
-      retro:0.25*fit(avg.bpm,75,150,40)+0.25*Math.min(1,high/0.24)+0.25*(1-Math.min(1,bass/0.42))+0.25*Math.min(1,mid/0.44)
+      edm:0.20*tempoDance+0.14*Math.min(1,bass/0.34)+0.12*Math.min(1,energy/0.28)+0.10*Math.min(1,high/0.24)+0.16*regularity+0.10*flux+0.08*onset+0.06*beatStrength+0.04*transient,
+      hiphop:0.20*tempoHip+0.18*Math.min(1,bass/0.36)+0.17*Math.min(1,mid/0.44)+0.08*(1-Math.min(1,high/0.36))+0.08*(1-regularity)+0.10*transient+0.08*beatStrength+0.06*harmonicity-0.03*onset,
+      jazz:0.22*fit(avg.bpm,65,115,30)+0.22*Math.min(1,mid/0.44)+0.16*(1-Math.min(1,high/0.3))+0.15*(1-Math.min(1,energy/0.32))+0.12*harmonicity+0.07*(1-onset)+0.06*(1-regularity),
+      rock:0.20*tempoRock+0.18*Math.min(1,mid/0.42)+0.17*Math.min(1,high/0.27)+0.16*Math.min(1,energy/0.28)+0.08*flux+0.08*onset+0.07*harmonicity+0.06*beatStrength,
+      pop:0.22*tempoPop+0.16*Math.min(1,high/0.25)+0.16*Math.min(1,energy/0.27)+0.12*Math.min(1,mid/0.42)+0.10*regularity+0.08*flux+0.07*onset+0.05*harmonicity+0.04*beatStrength,
+      retro:0.20*fit(avg.bpm,75,150,40)+0.16*Math.min(1,high/0.24)+0.16*(1-Math.min(1,bass/0.42))+0.16*Math.min(1,mid/0.44)+0.12*harmonicity+0.08*regularity+0.06*beatStrength+0.06*(1-onset)
     };
     var ranked=Object.keys(scores).map(function(k){return {genre:k,score:scores[k]};}).sort(function(a,b){return b.score-a.score;});
     var best=ranked[0], margin=best.score-ranked[1].score;
