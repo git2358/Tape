@@ -33,6 +33,7 @@
 * { box-sizing: border-box; }
 html, body { min-height: 100%; }
 body {
+  transition: background-color .7s ease, color .7s ease;
   background-color: var(--room);
   background-image: radial-gradient(ellipse at 50% -10%, #3a2d22 0%, transparent 55%);
   color: var(--ink);
@@ -87,6 +88,7 @@ body[data-theme="rock"] .panel { box-shadow:inset 0 1px 0 #ffffff10,0 10px 30px 
 
 
 .panel {
+  transition: background .7s ease, border-color .7s ease, box-shadow .7s ease, color .7s ease;
   background: linear-gradient(var(--panel-2), var(--panel));
   border: 1px solid var(--edge);
   border-radius: 8px;
@@ -125,6 +127,7 @@ canvas#viz { display: block; width: 100%; height: 160px; }
 /* Cassette */
 .bay { display: grid; gap: 10px; }
 .cassette { position: relative; width: 100%; max-width: 520px; margin-inline: auto; aspect-ratio: 8 / 5; }
+.cassette svg rect,.cassette svg line,.cassette svg circle,.cassette svg path,.cassette svg polygon { transition: fill .7s ease, stroke .7s ease; }
 .cassette svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .cassette .labelText { position: absolute; left: 8.6%; right: 8.6%; top: 14.5%; height: 22%; display: grid; align-content: center; gap: 0; pointer-events: none; color: #2b2418; }
 .labelText .t { font-family: var(--font-hand); font-weight: 600; font-size: clamp(16px, 4.6vw, 26px); line-height: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -334,7 +337,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
   /* ---------- state ---------- */
   var tracks = [], curId = null, nextId = 1, shuffle = false, repeat = 'off', tapeOn = true;
-  var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic', trackAnalyzed = false, featureTotals = {bass:0,mid:0,high:0,energy:0};
+  var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic', trackAnalyzed = false, genreSegments = [], featureTotals = {bass:0,mid:0,high:0,energy:0};
   var bag = [], hist = [], audio = null, ctx = null, nodes = {}, vizMode = 'spectrum', muted = false, limiterOn = true;
   var needsNativeBackgroundFallback = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var duck = 1, seekDir = 0, seekTimer = null, dragId = null, seeking = false, failStreak = 0;
@@ -827,7 +830,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   function resetGenreAnalysis() {
     detectedGenre = 'generic'; detectedBpm = 0; genreConfidence = 0;
     lastGenreSample = 0; prevBass = 0; lastBeat = 0; beatIntervals = []; bpmHistory = [];
-    themeSamples = 0; trackAnalyzed = false;
+    themeSamples = 0; trackAnalyzed = false; genreSegments = [];
     featureTotals = {bass:0,mid:0,high:0,energy:0};
     stableTheme = 'generic';
     if (themeMode === 'auto') applyTheme('generic');
@@ -857,31 +860,60 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     if (rise > 0.045 && (!lastBeat || ts-lastBeat > 1800)) lastBeat = ts;
     else if (rise > 0.045 && ts-lastBeat > 260) {
       var interval=(ts-lastBeat)/1000;
-      if(interval>=0.27&&interval<=1.5){beatIntervals.push(interval);if(beatIntervals.length>16)beatIntervals.shift();}
+      if(interval>=0.27&&interval<=1.5){beatIntervals.push(interval);if(beatIntervals.length>24)beatIntervals.shift();}
       lastBeat=ts;
     }
     if(beatIntervals.length>=3){
       var sorted=beatIntervals.slice().sort(function(a,b){return a-b;});
       var med=sorted[Math.floor(sorted.length/2)], bpm=60/med;
       if(bpm<70)bpm*=2; else if(bpm>160)bpm/=2;
-      if(bpm>=65&&bpm<=180){bpmHistory.push(bpm);if(bpmHistory.length>7)bpmHistory.shift();detectedBpm=bpmHistory.reduce(function(a,v){return a+v;},0)/bpmHistory.length;}
+      if(bpm>=65&&bpm<=180){bpmHistory.push(bpm);if(bpmHistory.length>9)bpmHistory.shift();detectedBpm=bpmHistory.reduce(function(a,v){return a+v;},0)/bpmHistory.length;}
     }
     themeSamples++;
-    if(themeSamples < 28) return;
+    if(themeSamples % 20 !== 0) return;
+    var seg = {
+      bass: featureTotals.bass/themeSamples,
+      mid: featureTotals.mid/themeSamples,
+      high: featureTotals.high/themeSamples,
+      energy: featureTotals.energy/themeSamples,
+      bpm: detectedBpm
+    };
+    genreSegments.push(seg);
+    var avg = {bass:0,mid:0,high:0,energy:0,bpm:0};
+    genreSegments.forEach(function(x){Object.keys(avg).forEach(function(k){avg[k]+=x[k]||0;});});
+    Object.keys(avg).forEach(function(k){avg[k]/=genreSegments.length;});
+    var intervals=beatIntervals.slice(), regularity=0;
+    if(intervals.length>=4){
+      var mean=intervals.reduce(function(a,v){return a+v;},0)/intervals.length;
+      var variance=intervals.reduce(function(a,v){return a+Math.pow(v-mean,2);},0)/intervals.length;
+      regularity=Math.max(0,1-Math.sqrt(variance)/Math.max(0.001,mean));
+    }
+    function fit(v,lo,hi,soft){
+      if(!v)return 0;
+      if(v>=lo&&v<=hi)return 1;
+      var d=v<lo?lo-v:v-hi;
+      return Math.max(0,1-d/soft);
+    }
+    var tempoDance=fit(avg.bpm,118,150,38), tempoHip=fit(avg.bpm,76,112,32),
+        tempoRock=fit(avg.bpm,100,165,35), tempoPop=fit(avg.bpm,88,150,35),
+        bass=avg.bass, mid=avg.mid, high=avg.high, energy=avg.energy;
+    var scores={
+      edm:0.27*tempoDance+0.18*Math.min(1,bass/0.34)+0.17*Math.min(1,energy/0.28)+0.14*Math.min(1,high/0.24)+0.24*regularity,
+      hiphop:0.28*tempoHip+0.24*Math.min(1,bass/0.36)+0.23*Math.min(1,mid/0.44)+0.13*(1-Math.min(1,high/0.36))+0.12*(1-regularity),
+      jazz:0.28*fit(avg.bpm,65,115,30)+0.28*Math.min(1,mid/0.44)+0.24*(1-Math.min(1,high/0.3))+0.20*(1-Math.min(1,energy/0.32)),
+      rock:0.28*tempoRock+0.24*Math.min(1,mid/0.42)+0.23*Math.min(1,high/0.27)+0.25*Math.min(1,energy/0.28),
+      pop:0.28*tempoPop+0.22*Math.min(1,high/0.25)+0.22*Math.min(1,energy/0.27)+0.16*Math.min(1,mid/0.42)+0.12*regularity,
+      retro:0.25*fit(avg.bpm,75,150,40)+0.25*Math.min(1,high/0.24)+0.25*(1-Math.min(1,bass/0.42))+0.25*Math.min(1,mid/0.44)
+    };
+    var ranked=Object.keys(scores).map(function(k){return {genre:k,score:scores[k]};}).sort(function(a,b){return b.score-a.score;});
+    var best=ranked[0], margin=best.score-ranked[1].score;
+    if(genreSegments.length<2) return;
+    if(genreSegments.length<4 && !(best.score>=0.66 && margin>=0.14)) return;
     trackAnalyzed = true;
-    var b=featureTotals.bass/themeSamples, m=featureTotals.mid/themeSamples,
-        h=featureTotals.high/themeSamples, energy=featureTotals.energy/themeSamples, bpm=detectedBpm;
-    var candidate='generic', confidence=0;
-    if(bpm>=118&&b>0.27&&energy>0.20){candidate='edm';confidence=0.58;}
-    else if(bpm>=82&&bpm<=112&&m>0.38&&b<0.43){candidate='hiphop';confidence=0.56;}
-    else if(bpm>=65&&bpm<=115&&m>0.35&&h<0.24&&b<0.38){candidate='jazz';confidence=0.55;}
-    else if(bpm>=105&&bpm<=165&&m>0.30&&energy>0.16&&h>0.13){candidate='rock';confidence=0.57;}
-    else if(bpm>=90&&bpm<=150&&h>0.16&&energy>0.15){candidate='pop';confidence=0.56;}
-    else if(bpm>=75&&bpm<=150&&h>0.13&&b<0.38){candidate='retro';confidence=0.55;}
-    detectedGenre = confidence >= 0.55 ? candidate : 'generic';
-    genreConfidence = detectedGenre === 'generic' ? 0 : confidence;
+    detectedGenre = best.score>=0.53 && margin>=0.055 ? best.genre : 'generic';
+    genreConfidence = detectedGenre==='generic' ? 0 : Math.min(0.99,Math.max(0,best.score));
     stableTheme = detectedGenre;
-    if (themeMode === 'auto') applyTheme(stableTheme);
+    if(themeMode==='auto') applyTheme(stableTheme);
   }
   function drawViz() {
     var dpr = Math.min(window.devicePixelRatio || 1, 2), W = viz.clientWidth, H = viz.clientHeight;
