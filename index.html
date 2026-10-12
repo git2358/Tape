@@ -34,7 +34,7 @@
 html, body { min-height: 100%; }
 body {
   position: relative;
-  transition: background-color .7s ease, color .7s ease;
+  transition: background-color .25s ease, color .25s ease;
   background-color: var(--room);
   background-image: radial-gradient(ellipse at 50% -10%, #3a2d22 0%, transparent 55%);
   color: var(--ink);
@@ -96,7 +96,7 @@ body[data-theme="rock"] .panel { box-shadow:inset 0 1px 0 #ffffff10,0 10px 30px 
 
 
 .panel {
-  transition: background .7s ease, border-color .7s ease, box-shadow .7s ease, color .7s ease;
+  transition: background .25s ease, border-color .25s ease, box-shadow .25s ease, color .25s ease;
   background: linear-gradient(var(--panel-2), var(--panel));
   border: 1px solid var(--edge);
   border-radius: 8px;
@@ -1006,12 +1006,12 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       if(bpm>=65&&bpm<=180){bpmHistory.push(bpm);if(bpmHistory.length>9)bpmHistory.shift();detectedBpm=bpmHistory.reduce(function(a,v){return a+v;},0)/bpmHistory.length;}
     }
     themeSamples++;
-    if(themeSamples % 10 !== 0) return;
+    if(themeSamples % 6 !== 0) return;
     var seg = {
-      bass: segmentTotals.bass/10, mid: segmentTotals.mid/10, high: segmentTotals.high/10,
-      energy: segmentTotals.energy/10, spectralFlux: segmentTotals.spectralFlux/10,
-      beatStrength: segmentTotals.beatStrength/10, lowTransient: segmentTotals.lowTransient/10,
-      harmonicity: segmentTotals.harmonicity/10, onsetDensity: Math.min(1,segmentTotals.onsets/3),
+      bass: segmentTotals.bass/6, mid: segmentTotals.mid/6, high: segmentTotals.high/6,
+      energy: segmentTotals.energy/6, spectralFlux: segmentTotals.spectralFlux/6,
+      beatStrength: segmentTotals.beatStrength/6, lowTransient: segmentTotals.lowTransient/6,
+      harmonicity: segmentTotals.harmonicity/6, onsetDensity: Math.min(1,segmentTotals.onsets/2),
       bpm: detectedBpm
     };
     genreSegments.push(seg);
@@ -1047,7 +1047,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     };
     var ranked=Object.keys(scores).map(function(k){return {genre:k,score:scores[k]};}).sort(function(a,b){return b.score-a.score;});
     var best=ranked[0],margin=best.score-ranked[1].score;
-    if(genreSegments.length<6) return;
+    if(genreSegments.length<4) return;
     var voiceEvidence=Math.min(1,Math.max(0,(mid-0.34)*2.3))*0.34+(1-Math.min(1,bass/0.38))*0.16+(1-Math.min(1,beatStrength/0.65))*0.18+(1-Math.min(1,regularity/0.65))*0.14+(1-Math.min(1,flux/0.8))*0.10+(1-onset)*0.08;
     var proposed='';
     if(voiceEvidence>=0.70&&best.score<0.72&&mid>=0.42&&bass<=0.38&&beatStrength<0.48&&regularity<0.70&&flux<0.80&&onset<0.68) proposed='voice';
