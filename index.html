@@ -857,7 +857,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     segmentTotals = {bass:0,mid:0,high:0,energy:0,spectralFlux:0,beatStrength:0,lowTransient:0,harmonicity:0,onsets:0};
     featureTotals = {bass:0,mid:0,high:0,energy:0}; prevSpectrum = null; fluxHistory = []; lastOnset = 0;
     stableTheme = 'generic';
-    if (themeMode === 'auto') applyTheme('generic');
+    /* Keep the currently displayed Auto theme while a new track is being analysed.
+       The new track's confident result (including Generic) will replace it later. */
   }
   /* Analyse a complete local track in the background while playback continues.
      This deliberately detects speech only; genre labels still use the live spectral analyser. */
