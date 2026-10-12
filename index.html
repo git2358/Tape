@@ -960,7 +960,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
             jazz:fit(bpmAvg,65,115,30)>=.35&&energy<=.72&&harm>=.22,
             retro:fit(bpmAvg,75,150,40)>=.35&&mid>=.18&&bass<=.48
           };
-          if(speechScore>=.78&&meanRms>.006&&meanZcr>=.025&&meanZcr<=.22){genre='voice';confidence=speechScore;}else if(voice>=.74&&best.score<.58&&mid>=.38&&beat<.48&&onset<.62){genre='voice';confidence=voice;}else if(best.score>=.43&&margin>=.055&&genreFits[best.genre])genre=best.genre;
+          if(speechScore>=.78&&meanRms>.006&&meanZcr>=.025&&meanZcr<=.22){genre='voice';confidence=speechScore;}else if(voice>=.74&&best.score<.58&&mid>=.38&&beat<.48&&onset<.62){genre='voice';confidence=voice;}else if(best.score>=.39&&margin>=.025&&genreFits[best.genre])genre=best.genre;
           if(genre!=='generic') { detectedGenre=genre; stableTheme=genre; genreConfidence=confidence; if(bpmAvg)detectedBpm=bpmAvg; trackAnalyzed=true; if(themeMode==='auto')applyTheme(genre); }
           fullTrackAnalysisActive=false;
         }
@@ -1084,7 +1084,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       retro: fit(avg.bpm,75,150,40) >= 0.35 && mid >= 0.18 && bass <= 0.48
     };
     if(voiceEvidence>=0.74 && musicEvidence<0.58 && mid>=0.38 && beatStrength<0.48 && onset<0.62) proposed='voice';
-    else if(best.score>=0.43 && margin>=0.055 && genreFits[best.genre]) proposed=best.genre;
+    else if(best.score>=0.39 && margin>=0.025 && genreFits[best.genre]) proposed=best.genre;
     /* Require repeated evidence before changing the cassette theme; early transient-heavy
        samples otherwise bias the classifier toward Rock. Ambiguous windows never reset it. */
     if(proposed) {
