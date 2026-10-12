@@ -862,7 +862,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   }
   /* Decode local files and classify from features sampled across the whole track. */
   function preanalyzeTrack(track, id) {
-    if (!track.file || typeof track.file.arrayBuffer !== 'function' || track.file.size > 200 * 1024 * 1024 || !ctx) return;
+    /* iOS Safari may terminate the tab when a long compressed file is decoded into a full-size PCM AudioBuffer. Keep live analysis on iOS to avoid duplicating the track in memory. */
+    var isIOSSafari = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (isIOSSafari || !track.file || typeof track.file.arrayBuffer !== 'function' || track.file.size > 200 * 1024 * 1024 || !ctx) return;
     var token = ++trackAnalysisToken;
     fullTrackAnalysisActive = true;
     function fail() { if (curId === id && token === trackAnalysisToken) fullTrackAnalysisActive = false; }
