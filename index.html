@@ -70,6 +70,7 @@ body[data-theme="hiphop"] { --room:#17101c;--panel:#26182b;--panel-2:#38213b;--e
 body[data-theme="jazz"] { --room:#211419;--panel:#382027;--panel-2:#4a2a30;--edge:#b88a50;--ink:#fff0d7;--ink-dim:#c9a99a;--accent:#c39a5b;--accent-hi:#f0d39a;--vfd:#d9d7a4;--vfd-hi:#fff6d6;--vfd-dim:#34321b;--glass:#100c0b;--paper:#f0dfbd;--tape:#6b2937;--shell:#4a2b2a;--font-ui:"Playfair Display",serif;--font-body:"Barlow",sans-serif; }
 body[data-theme="retro"] { --room:#19131b;--panel:#2a202e;--panel-2:#3c2a3d;--edge:#e17845;--ink:#fff0d9;--ink-dim:#c7a7a0;--accent:#ff814a;--accent-hi:#ffd166;--vfd:#64f5ce;--vfd-hi:#e4fff4;--vfd-dim:#17443c;--glass:#080d12;--paper:#f5d9b5;--tape:#b94c47;--shell:#382b38;--font-ui:"Orbitron",sans-serif;--font-body:"Barlow Condensed",sans-serif; }
 body[data-theme="generic"] { --font-ui:"Barlow Condensed",sans-serif;--font-body:"Barlow",system-ui,sans-serif; }
+body[data-theme="voice"] { --room:#101c1b;--panel:#1b2a28;--panel-2:#263936;--edge:#78b7a4;--ink:#effaf5;--ink-dim:#a6c5b8;--accent:#6dc5a6;--accent-hi:#b4f3d7;--vfd:#8fffe0;--vfd-hi:#f2fff9;--vfd-dim:#153c32;--glass:#07120f;--paper:#e4f2e9;--tape:#286452;--shell:#203d35;--font-ui:"Barlow Condensed",sans-serif;--font-body:"Barlow",system-ui,sans-serif; }
 body[data-theme="pop"] .cassette svg rect:first-of-type { stroke:var(--edge); }
 .cassette svg rect:nth-of-type(2) { fill:var(--paper); }
 .cassette svg rect:nth-of-type(3) { fill:var(--accent); }
@@ -225,7 +226,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     <div class="spec">Stereo cassette player · Type I · 120 µs EQ</div>
   </header>
 
-  <div class="theme-tools"><label for="themeSelect">Cassette theme <select id="themeSelect"><option value="auto">Auto detect</option><option value="generic">Generic / unknown</option><option value="pop">Pop · Neon 90s</option><option value="rock">Rock / Metal</option><option value="edm">EDM / Dance</option><option value="hiphop">Hip-hop / R&amp;B</option><option value="jazz">Jazz / Soul</option><option value="retro">Synth-pop / Retro</option></select></label><span id="genreReadout" aria-live="polite">GENRE -- · BPM --</span></div>
+  <div class="theme-tools"><label for="themeSelect">Cassette theme <select id="themeSelect"><option value="auto">Auto detect</option><option value="generic">Generic / unknown</option><option value="voice">Voice / Podcast</option><option value="pop">Pop · Neon 90s</option><option value="rock">Rock / Metal</option><option value="edm">EDM / Dance</option><option value="hiphop">Hip-hop / R&amp;B</option><option value="jazz">Jazz / Soul</option><option value="retro">Synth-pop / Retro</option></select></label><span id="genreReadout" aria-live="polite">GENRE -- · BPM --</span></div>
   <div class="grid">
     <section class="panel vfd" aria-label="Display">
       <div class="vfd-glass">
@@ -350,7 +351,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
   /* ---------- state ---------- */
   var tracks = [], curId = null, nextId = 1, shuffle = false, repeat = 'off', tapeOn = true;
-  var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic', trackAnalyzed = false, genreSegments = [], segmentTotals = {bass:0,mid:0,high:0,energy:0,spectralFlux:0,beatStrength:0,lowTransient:0,harmonicity:0,onsets:0}, featureTotals = {bass:0,mid:0,high:0,energy:0}, prevSpectrum = null, fluxHistory = [], lastOnset = 0;
+  var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic', trackAnalyzed = false, genreSegments = [], segmentTotals = {bass:0,mid:0,high:0,energy:0,spectralFlux:0,beatStrength:0,lowTransient:0,harmonicity:0,onsets:0}, featureTotals = {bass:0,mid:0,high:0,energy:0}, prevSpectrum = null, fluxHistory = [], lastOnset = 0, trackAnalysisToken = 0;
   var bag = [], hist = [], audio = null, ctx = null, nodes = {}, vizMode = 'spectrum', muted = false, limiterOn = true;
   var needsNativeBackgroundFallback = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var duck = 1, seekDir = 0, seekTimer = null, dragId = null, seeking = false, failStreak = 0;
@@ -538,6 +539,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       bgA.src = t.src; bgA.volume = 0.001;
     }
     audio = { a: a, fxA: useEffects ? a : null, bgA: bgA, node: node, plain: !useEffects, bypass: false, id: id };
+    preanalyzeVoice(t, id);
     if (audio.plain) a.volume = Math.max(0, Math.min(1, muted ? 0 : +ui.vol.value * duck));
     else routeAudio();
     a.addEventListener('loadedmetadata', function () { if (isFinite(a.duration) && a.duration > 0) { t.dur = a.duration; renderList(); } });
@@ -840,7 +842,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var t = theme || 'generic';
     document.body.setAttribute('data-theme', t);
     $('#themeSelect').value = themeMode;
-    var names = {generic:'GENERIC',pop:'POP',rock:'ROCK',edm:'EDM',hiphop:'HIP-HOP',jazz:'JAZZ / SOUL',retro:'RETRO'};
+    var names = {generic:'GENERIC',voice:'VOICE / PODCAST',pop:'POP',rock:'ROCK',edm:'EDM',hiphop:'HIP-HOP',jazz:'JAZZ / SOUL',retro:'RETRO'};
     var genre = themeMode === 'auto' ? (t === 'generic' ? 'UNKNOWN' : names[t]) : names[t] || 'GENERIC';
     $('#genreReadout').textContent = genre + ' · BPM ' + (detectedBpm ? Math.round(detectedBpm) : '--');
     var rootStyle = getComputedStyle(document.body);
@@ -850,13 +852,64 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   }
   function resetGenreAnalysis() {
     detectedGenre = 'generic'; detectedBpm = 0; genreConfidence = 0;
-    lastGenreSample = 0; prevBass = 0; lastBeat = 0; beatIntervals = []; bpmHistory = [];
+    lastGenreSample = 0; prevBass = 0; lastBeat = 0; beatIntervals = []; bpmHistory = []; trackAnalysisToken++;
     themeSamples = 0; trackAnalyzed = false; genreSegments = [];
     segmentTotals = {bass:0,mid:0,high:0,energy:0,spectralFlux:0,beatStrength:0,lowTransient:0,harmonicity:0,onsets:0};
     featureTotals = {bass:0,mid:0,high:0,energy:0}; prevSpectrum = null; fluxHistory = []; lastOnset = 0;
     stableTheme = 'generic';
     if (themeMode === 'auto') applyTheme('generic');
   }
+  /* Analyse a complete local track in the background while playback continues.
+     This deliberately detects speech only; genre labels still use the live spectral analyser. */
+  function preanalyzeVoice(track, id) {
+    var token = ++trackAnalysisToken;
+    var sourcePromise;
+    if (track.file && typeof track.file.arrayBuffer === 'function') sourcePromise = track.file.arrayBuffer();
+    else if (/^https?:/i.test(track.src)) sourcePromise = fetch(track.src, { mode: 'cors' }).then(function (r) { if (!r.ok) throw new Error('fetch failed'); return r.arrayBuffer(); });
+    else return;
+    sourcePromise.then(function (data) {
+      if (!ctx || curId !== id || token !== trackAnalysisToken) return;
+      return ctx.decodeAudioData(data.slice(0)).then(function (buf) {
+        if (!audio || audio.id !== id || curId !== id || token !== trackAnalysisToken || !buf.length) return;
+        var channel = buf.getChannelData(0), sr = buf.sampleRate, hop = Math.max(1, Math.floor(sr * 0.02));
+        var frames = [], sumRms = 0, sumZcr = 0, active = 0;
+        for (var start = 0; start + hop < channel.length; start += hop) {
+          var energy = 0, crossings = 0, prev = channel[start];
+          for (var j = start; j < start + hop; j++) {
+            var v = channel[j]; energy += v * v;
+            if ((v >= 0 && prev < 0) || (v < 0 && prev >= 0)) crossings++;
+            prev = v;
+          }
+          var rms = Math.sqrt(energy / hop), zcr = crossings / hop;
+          frames.push({rms:rms,zcr:zcr});
+          sumRms += rms; sumZcr += zcr;
+          if (rms > 0.008) active++;
+        }
+        if (frames.length < 100) return;
+        var meanRms = sumRms / frames.length, meanZcr = sumZcr / frames.length, variance = 0, silenceTransitions = 0, prevActive = false;
+        frames.forEach(function (f) {
+          variance += Math.pow(f.rms - meanRms, 2);
+          var nowActive = f.rms > Math.max(0.008, meanRms * 0.22);
+          if (nowActive !== prevActive) silenceTransitions++;
+          prevActive = nowActive;
+        });
+        var rmsCv = Math.sqrt(variance / frames.length) / Math.max(0.001, meanRms);
+        var activeRatio = active / frames.length;
+        var zcrFit = Math.max(0, 1 - Math.abs(meanZcr - 0.085) / 0.11);
+        var speechScore = 0.34 * zcrFit +
+          0.25 * Math.min(1, rmsCv / 0.85) +
+          0.22 * Math.min(1, silenceTransitions / Math.max(1, frames.length * 0.055)) +
+          0.19 * Math.min(1, activeRatio / 0.78);
+        /* A speech candidate should have speech-like zero crossings and changing syllabic
+           energy, not merely a quiet or instrumental full-length recording. */
+        if (speechScore >= 0.72 && meanRms > 0.006 && meanZcr >= 0.025 && meanZcr <= 0.22) {
+          detectedGenre = 'voice'; genreConfidence = speechScore; stableTheme = 'voice'; trackAnalyzed = true;
+          if (themeMode === 'auto') applyTheme('voice');
+        }
+      });
+    }).catch(function () {});
+  }
+
   function estimateGenre(ts, playing) {
     if (!playing || trackAnalyzed || !audio || audio.plain || audio.bypass || !nodes.an || !ctx) return;
     if (genreSegments.length >= 12) { trackAnalyzed = true; return; }
@@ -949,8 +1002,11 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var ranked=Object.keys(scores).map(function(k){return {genre:k,score:scores[k]};}).sort(function(a,b){return b.score-a.score;});
     var best=ranked[0], margin=best.score-ranked[1].score;
     if(genreSegments.length<2) return;
-    detectedGenre = best.score>=0.40 && margin>=0.025 ? best.genre : 'generic';
-    genreConfidence = detectedGenre==='generic' ? 0 : Math.min(0.99,Math.max(0,best.score));
+    var musicEvidence=Math.max(scores.edm,scores.hiphop,scores.jazz,scores.rock,scores.pop,scores.retro);
+    var voiceEvidence=Math.min(1,Math.max(0,(mid-0.34)*2.3))*0.34 + (1-Math.min(1,bass/0.38))*0.16 + (1-Math.min(1,beatStrength/0.65))*0.18 + (1-Math.min(1,regularity/0.65))*0.14 + (1-Math.min(1,flux/0.8))*0.10 + (1-onset)*0.08;
+    if(voiceEvidence>=0.64 && musicEvidence<0.64) { detectedGenre='voice'; genreConfidence=voiceEvidence; }
+    else if(best.score>=0.40 && margin>=0.025) { detectedGenre=best.genre; genreConfidence=Math.min(0.99,Math.max(0,best.score)); }
+    else if(detectedGenre==='generic' || detectedGenre==='voice') { detectedGenre='generic'; genreConfidence=0; }
     stableTheme = detectedGenre;
     if(themeMode==='auto') applyTheme(stableTheme);
     trackAnalyzed = genreSegments.length >= 12;
