@@ -337,7 +337,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 
   /* ---------- state ---------- */
   var tracks = [], curId = null, nextId = 1, shuffle = false, repeat = 'off', tapeOn = true;
-  var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic', trackAnalyzed = false, genreSegments = [], featureTotals = {bass:0,mid:0,high:0,energy:0};
+  var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic', trackAnalyzed = false, genreSegments = [], segmentTotals = {bass:0,mid:0,high:0,energy:0}, featureTotals = {bass:0,mid:0,high:0,energy:0};
   var bag = [], hist = [], audio = null, ctx = null, nodes = {}, vizMode = 'spectrum', muted = false, limiterOn = true;
   var needsNativeBackgroundFallback = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   var duck = 1, seekDir = 0, seekTimer = null, dragId = null, seeking = false, failStreak = 0;
@@ -831,7 +831,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     detectedGenre = 'generic'; detectedBpm = 0; genreConfidence = 0;
     lastGenreSample = 0; prevBass = 0; lastBeat = 0; beatIntervals = []; bpmHistory = [];
     themeSamples = 0; trackAnalyzed = false; genreSegments = [];
-    featureTotals = {bass:0,mid:0,high:0,energy:0};
+    segmentTotals = {bass:0,mid:0,high:0,energy:0}; featureTotals = {bass:0,mid:0,high:0,energy:0};
     stableTheme = 'generic';
     if (themeMode === 'auto') applyTheme('generic');
   }
@@ -851,10 +851,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       else if(hz>=2500&&hz<9000) high+=v;
     }
     var norm=Math.max(0.001,bass+mid+high);
-    featureTotals.bass += bass/norm;
-    featureTotals.mid += mid/norm;
-    featureTotals.high += high/norm;
-    featureTotals.energy += Math.min(1,total/Math.max(1,n)*3.6);
+    var bassFeature=bass/norm, midFeature=mid/norm, highFeature=high/norm, energyFeature=Math.min(1,total/Math.max(1,n)*3.6);
+    featureTotals.bass += bassFeature; featureTotals.mid += midFeature; featureTotals.high += highFeature; featureTotals.energy += energyFeature;
+    segmentTotals.bass += bassFeature; segmentTotals.mid += midFeature; segmentTotals.high += highFeature; segmentTotals.energy += energyFeature;
     var bassLevel=bass/Math.max(1,Math.floor(115/hzPerBin)-Math.floor(35/hzPerBin));
     var rise=Math.max(0,bassLevel-prevBass); prevBass=bassLevel;
     if (rise > 0.045 && (!lastBeat || ts-lastBeat > 1800)) lastBeat = ts;
@@ -872,13 +871,14 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     themeSamples++;
     if(themeSamples % 20 !== 0) return;
     var seg = {
-      bass: featureTotals.bass/themeSamples,
-      mid: featureTotals.mid/themeSamples,
-      high: featureTotals.high/themeSamples,
-      energy: featureTotals.energy/themeSamples,
+      bass: segmentTotals.bass/20,
+      mid: segmentTotals.mid/20,
+      high: segmentTotals.high/20,
+      energy: segmentTotals.energy/20,
       bpm: detectedBpm
     };
     genreSegments.push(seg);
+    segmentTotals = {bass:0,mid:0,high:0,energy:0};
     var avg = {bass:0,mid:0,high:0,energy:0,bpm:0};
     genreSegments.forEach(function(x){Object.keys(avg).forEach(function(k){avg[k]+=x[k]||0;});});
     Object.keys(avg).forEach(function(k){avg[k]/=genreSegments.length;});
