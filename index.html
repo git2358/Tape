@@ -887,7 +887,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
         }
         function scan(){
           if(!audio||audio.id!==id||curId!==id||token!==trackAnalysisToken)return;
-          var stop=Math.min(x.length-stride*N,pos+sr*5);
+          /* Keep each analysis slice short so FFT work yields frequently and cannot audibly interrupt playback. */
+          var stop=Math.min(x.length-stride*N,pos+sr*0.5);
           while(pos<stop){
             var sq=0,cross=0,previousSample=x[pos]||0;
             for(var q=0;q<N;q++){var v=x[pos+q*stride]||0;sq+=v*v;if((v>=0&&previousSample<0)||(v<0&&previousSample>=0))cross++;previousSample=v;re[q]=v*win[q];im[q]=0;}
