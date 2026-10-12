@@ -696,7 +696,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var chip = $('#cLimiter');
     if (!chip) return;
     var reduction = nodes.comp ? nodes.comp.reduction : 0;
-    chip.textContent = limiterOn ? Math.min(0, reduction).toFixed(1) + ' dB' : 'LIMITER';
+    chip.textContent = limiterOn ? Math.min(0, reduction).toFixed(1) + ' dB' : 'AVL';
     chip.classList.toggle('on', limiterOn);
     chip.classList.toggle('off', !limiterOn);
   }
