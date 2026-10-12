@@ -228,7 +228,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     <div class="spec">Stereo cassette player · Type I · 120 µs EQ</div>
   </header>
 
-  <div class="theme-tools"><label for="themeSelect">Cassette theme <select id="themeSelect"><option value="auto">Auto detect</option><option value="generic">Generic / unknown</option><option value="voice">Voice / Podcast</option><option value="pop">Pop · Neon 90s</option><option value="rock">Rock / Metal</option><option value="edm">EDM / Dance</option><option value="hiphop">Hip-hop / R&amp;B</option><option value="jazz">Jazz / Soul</option><option value="retro">Synth-pop / Retro</option></select></label><span id="genreReadout" aria-live="polite">GENRE -- · BPM --</span></div>
+  <div class="theme-tools"><label for="themeSelect">Cassette theme <select id="themeSelect"><option value="auto">Auto detect</option><option value="generic">Generic / unknown</option><option value="voice">Voice / Podcast</option><option value="pop">Pop · Neon 90s</option><option value="rock">Rock / Metal</option><option value="edm">EDM / Dance</option><option value="hiphop">Hip-hop / R&amp;B</option><option value="jazz">Jazz / Soul</option><option value="retro">Synth-pop / Retro</option></select></label><button type="button" class="btn" id="genreRefresh" title="Recheck the currently playing audio">RECHECK GENRE</button><span id="genreReadout" aria-live="polite">GENRE -- · BPM --</span></div>
   <div class="grid">
     <section class="panel vfd" aria-label="Display">
       <div class="vfd-glass">
@@ -1343,7 +1343,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   $('#themeSelect').value = themeMode;
   applyTheme('generic');
   $('#genreReadout').textContent = 'GENERIC · BPM --';
-  $('#themeSelect').addEventListener('change', function () { themeMode = this.value; var playing = !!(audio && audio.a && !audio.a.paused && !audio.a.ended); applyTheme(playing ? (themeMode === 'auto' ? detectedGenre : themeMode) : 'generic'); if (!playing) $('#genreReadout').textContent = 'GENERIC · BPM --'; saveSettings(); }); applyTape(); updateChips(); setLabels(); renderList();
+  $('#themeSelect').addEventListener('change', function () { themeMode = this.value; var playing = !!(audio && audio.a && !audio.a.paused && !audio.a.ended); applyTheme(playing ? (themeMode === 'auto' ? detectedGenre : themeMode) : 'generic'); if (!playing) $('#genreReadout').textContent = 'GENERIC · BPM --'; saveSettings(); });
+  $('#genreRefresh').addEventListener('click', function () { themeMode = 'auto'; $('#themeSelect').value = 'auto'; resetGenreAnalysis(); saveSettings(); var playing = !!(audio && audio.a && !audio.a.paused && !audio.a.ended); $('#genreReadout').textContent = playing ? 'CHECKING GENRE · BPM --' : 'PLAY TO CHECK · BPM --'; });
+  applyTape(); updateChips(); setLabels(); renderList();
   document.querySelectorAll('[data-viz]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-viz') === vizMode)); });
   setVol();
   requestAnimationFrame(frame);
