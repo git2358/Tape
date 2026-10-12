@@ -71,6 +71,12 @@ body[data-theme="jazz"] { --room:#211419;--panel:#382027;--panel-2:#4a2a30;--edg
 body[data-theme="retro"] { --room:#19131b;--panel:#2a202e;--panel-2:#3c2a3d;--edge:#e17845;--ink:#fff0d9;--ink-dim:#c7a7a0;--accent:#ff814a;--accent-hi:#ffd166;--vfd:#64f5ce;--vfd-hi:#e4fff4;--vfd-dim:#17443c;--glass:#080d12;--paper:#f5d9b5;--tape:#b94c47;--shell:#382b38;--font-ui:"Orbitron",sans-serif;--font-body:"Barlow Condensed",sans-serif; }
 body[data-theme="generic"] { --font-ui:"Barlow Condensed",sans-serif;--font-body:"Barlow",system-ui,sans-serif; }
 body[data-theme="voice"] { --room:#101c1b;--panel:#1b2a28;--panel-2:#263936;--edge:#78b7a4;--ink:#effaf5;--ink-dim:#a6c5b8;--accent:#6dc5a6;--accent-hi:#b4f3d7;--vfd:#8fffe0;--vfd-hi:#f2fff9;--vfd-dim:#153c32;--glass:#07120f;--paper:#e4f2e9;--tape:#286452;--shell:#203d35;--font-ui:"Barlow Condensed",sans-serif;--font-body:"Barlow",system-ui,sans-serif; }
+body[data-theme="country"] { --room:#21180e;--panel:#352619;--panel-2:#4b3522;--edge:#c18b4a;--ink:#fff1d8;--ink-dim:#cbb493;--accent:#d89b52;--accent-hi:#ffe0a0;--vfd:#ffd18a;--vfd-hi:#fff4d8;--vfd-dim:#4a3018;--glass:#120c06;--paper:#f1dfbf;--tape:#8d5429;--shell:#4a3423;--font-ui:"Barlow Condensed",sans-serif;--font-body:"Barlow",sans-serif; }
+body[data-theme="classical"] { --room:#171522;--panel:#262337;--panel-2:#353149;--edge:#b7a4e8;--ink:#f7f1ff;--ink-dim:#b9b0d0;--accent:#c5b1f4;--accent-hi:#fff0c2;--vfd:#d7c7ff;--vfd-hi:#ffffff;--vfd-dim:#30264a;--glass:#0b0913;--paper:#eee6fa;--tape:#7962a8;--shell:#322a47;--font-ui:"Playfair Display",serif;--font-body:"Barlow",sans-serif; }
+body[data-theme="reggae"] { --room:#101b12;--panel:#1c2c1c;--panel-2:#2d4228;--edge:#d2b23d;--ink:#fff8d7;--ink-dim:#c3c69b;--accent:#d5b52e;--accent-hi:#f8ed75;--vfd:#baff72;--vfd-hi:#fff7c8;--vfd-dim:#2b451e;--glass:#080e08;--paper:#f3e6bc;--tape:#b53c32;--shell:#2d4329;--font-ui:"Bungee",sans-serif;--font-body:"Barlow",sans-serif; }
+body[data-theme="funk"] { --room:#211025;--panel:#35183b;--panel-2:#4b2453;--edge:#ef63c4;--ink:#fff0ff;--ink-dim:#d2a9d1;--accent:#f45fc2;--accent-hi:#ffe16b;--vfd:#ff9be6;--vfd-hi:#ffffff;--vfd-dim:#4c1c4d;--glass:#100713;--paper:#f6dff0;--tape:#e2a52b;--shell:#48234f;--font-ui:"Bungee",sans-serif;--font-body:"Barlow Condensed",sans-serif; }
+body[data-theme="ambient"] { --room:#091a23;--panel:#102a35;--panel-2:#173a47;--edge:#5ebac8;--ink:#e5fbff;--ink-dim:#9fc9d1;--accent:#76dbe0;--accent-hi:#d5ffff;--vfd:#86f5f0;--vfd-hi:#ffffff;--vfd-dim:#17414a;--glass:#041016;--paper:#d9f2f4;--tape:#447ba0;--shell:#153744;--font-ui:"Orbitron",sans-serif;--font-body:"Barlow",sans-serif; }
+body[data-theme="latin"] { --room:#20100e;--panel:#371b19;--panel-2:#4d2921;--edge:#ff8b45;--ink:#fff1d8;--ink-dim:#d3aa91;--accent:#ff784a;--accent-hi:#ffe17d;--vfd:#ffb56b;--vfd-hi:#fff5dc;--vfd-dim:#572619;--glass:#120706;--paper:#f8dfbe;--tape:#ce3f36;--shell:#51271f;--font-ui:"Bungee",sans-serif;--font-body:"Barlow Condensed",sans-serif; }
 body[data-theme="pop"] .cassette svg rect:first-of-type { stroke:var(--edge); }
 .cassette svg rect:nth-of-type(2) { fill:var(--paper); }
 .cassette svg rect:nth-of-type(3) { fill:var(--accent); }
@@ -228,7 +234,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     <div class="spec">Stereo cassette player · Type I · 120 µs EQ</div>
   </header>
 
-  <div class="theme-tools"><label for="themeSelect">Cassette theme <select id="themeSelect"><option value="auto">Auto detect</option><option value="generic">Generic / unknown</option><option value="voice">Voice / Podcast</option><option value="pop">Pop · Neon 90s</option><option value="rock">Rock / Metal</option><option value="edm">EDM / Dance</option><option value="hiphop">Hip-hop / R&amp;B</option><option value="jazz">Jazz / Soul</option><option value="retro">Synth-pop / Retro</option></select></label><button type="button" class="btn" id="genreRefresh" title="Recheck the currently playing audio">RECHECK GENRE</button><span id="genreReadout" aria-live="polite">GENRE -- · BPM --</span></div>
+  <div class="theme-tools"><label for="themeSelect">Cassette theme <select id="themeSelect"><option value="auto">Auto detect</option><option value="generic">Generic / unknown</option><option value="voice">Voice / Podcast</option><option value="pop">Pop · Neon 90s</option><option value="rock">Rock / Metal</option><option value="edm">EDM / Dance</option><option value="hiphop">Hip-hop / R&amp;B</option><option value="jazz">Jazz / Soul</option><option value="retro">Synth-pop / Retro</option><option value="country">Country / Folk</option><option value="classical">Classical / Orchestral</option><option value="reggae">Reggae / Ska</option><option value="funk">Funk / Disco</option><option value="ambient">Ambient / Chillout</option><option value="latin">Latin / Tropical</option></select></label><button type="button" class="btn" id="genreRefresh" title="Recheck the currently playing audio">RECHECK GENRE</button><span id="genreReadout" aria-live="polite">GENRE -- · BPM --</span></div>
   <div class="grid">
     <section class="panel vfd" aria-label="Display">
       <div class="vfd-glass">
@@ -844,7 +850,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var t = theme || 'generic';
     document.body.setAttribute('data-theme', t);
     $('#themeSelect').value = themeMode;
-    var names = {generic:'GENERIC',voice:'VOICE / PODCAST',pop:'POP',rock:'ROCK',edm:'EDM',hiphop:'HIP-HOP',jazz:'JAZZ / SOUL',retro:'RETRO'};
+    var names = {generic:'GENERIC',voice:'VOICE / PODCAST',pop:'POP',rock:'ROCK / METAL',edm:'EDM / DANCE',hiphop:'HIP-HOP / R&B',jazz:'JAZZ / SOUL',retro:'SYNTH-POP / RETRO',country:'COUNTRY / FOLK',classical:'CLASSICAL',reggae:'REGGAE / SKA',funk:'FUNK / DISCO',ambient:'AMBIENT / CHILLOUT',latin:'LATIN / TROPICAL'};
     var genre = themeMode === 'auto' ? (t === 'generic' ? 'UNKNOWN' : names[t]) : names[t] || 'GENERIC';
     $('#genreReadout').textContent = genre + ' · BPM ' + (detectedBpm ? Math.round(detectedBpm) : '--');
     var rootStyle = getComputedStyle(document.body);
@@ -923,6 +929,12 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
           var bass=avg.bass,mid=avg.mid,high=avg.high,energy=avg.energy,flux=Math.min(1,avg.flux/.22),onset=Math.min(1,avg.onset),beat=Math.min(1,avg.beat/.45),trans=Math.min(1,avg.trans/.18),harm=Math.min(1,avg.harm/.42);
           var scores={
             edm:.20*fit(bpmAvg,118,150,38)+.14*Math.min(1,bass/.34)+.12*Math.min(1,energy/.28)+.10*Math.min(1,high/.24)+.16*regularity+.10*flux+.08*onset+.06*beat+.04*trans,
+            country:.22*fit(bpmAvg,75,130,38)+.18*Math.min(1,mid/.44)+.16*Math.min(1,harm/.55)+.14*(1-Math.min(1,bass/.48))+.12*Math.min(1,high/.3)+.10*regularity+.08*(1-Math.min(1,energy/.4)),
+            classical:.20*fit(bpmAvg,50,130,48)+.24*Math.min(1,harm/.65)+.18*Math.min(1,mid/.5)+.16*(1-Math.min(1,onset/.75))+.12*(1-Math.min(1,trans/.7))+.10*(1-Math.min(1,bass/.48)),
+            reggae:.18*fit(bpmAvg,65,105,30)+.22*Math.min(1,bass/.4)+.16*Math.min(1,mid/.44)+.14*(1-Math.min(1,high/.4))+.12*(1-Math.min(1,regularity/.9))+.10*Math.min(1,beat/.45)+.08*(1-Math.min(1,energy/.45)),
+            funk:.18*fit(bpmAvg,90,130,32)+.20*Math.min(1,bass/.4)+.18*Math.min(1,mid/.45)+.14*Math.min(1,high/.32)+.12*regularity+.10*Math.min(1,beat/.45)+.08*harm,
+            ambient:.20*(1-Math.min(1,energy/.42))+.18*(1-Math.min(1,onset/.8))+.18*(1-Math.min(1,flux/.8))+.16*Math.min(1,harm/.65)+.14*(1-Math.min(1,beat/.55))+.14*(1-Math.min(1,bass/.5)),
+            latin:.20*fit(bpmAvg,85,150,40)+.18*Math.min(1,beat/.48)+.16*Math.min(1,trans/.45)+.14*Math.min(1,bass/.4)+.12*Math.min(1,high/.32)+.12*Math.min(1,onset/.8)+.08*regularity,
             hiphop:.20*fit(bpmAvg,76,112,32)+.18*Math.min(1,bass/.36)+.17*Math.min(1,mid/.44)+.08*(1-Math.min(1,high/.36))+.08*(1-regularity)+.10*trans+.08*beat+.06*harm-.03*onset,
             jazz:.22*fit(bpmAvg,65,115,30)+.22*Math.min(1,mid/.44)+.16*(1-Math.min(1,high/.3))+.15*(1-Math.min(1,energy/.32))+.12*harm+.07*(1-onset)+.06*(1-regularity),
             rock:.20*fit(bpmAvg,100,165,35)+.18*Math.min(1,mid/.42)+.17*Math.min(1,high/.27)+.16*Math.min(1,energy/.28)+.08*flux+.08*onset+.07*harm+.06*beat,
@@ -936,6 +948,12 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
           var speechScore=.34*zcrFit+.25*Math.min(1,rmsCv/.85)+.22*Math.min(1,transitions/Math.max(1,frameCount*.055))+.19*Math.min(1,(activeFrames/Math.max(1,frameCount))/.78);
           var genreFits={
             edm:fit(bpmAvg,118,150,38)>=.42&&regularity>=.28&&beat>=.22&&(flux>=.16||onset>=.22),
+            country:fit(bpmAvg,75,130,38)>=.38&&mid>=.18&&harm>=.18&&bass<=.55,
+            classical:fit(bpmAvg,50,130,48)>=.30&&harm>=.28&&onset<.78&&trans<.72,
+            reggae:fit(bpmAvg,65,105,30)>=.32&&bass>=.18&&high<=.48,
+            funk:fit(bpmAvg,90,130,32)>=.30&&bass>=.18&&mid>=.18&&high>=.10,
+            ambient:energy<=.48&&onset<.72&&flux<.75&&harm>=.12,
+            latin:fit(bpmAvg,85,150,40)>=.32&&beat>=.18&&(trans>=.12||onset>=.22),
             hiphop:fit(bpmAvg,76,112,32)>=.28&&bass>=.20&&(trans>=.12||regularity<=.62),
             pop:fit(bpmAvg,88,150,35)>=.38&&regularity>=.24&&energy>=.12,
             rock:fit(bpmAvg,100,165,35)>=.30&&energy>=.18&&(high>=.16||harm>=.38),
@@ -1033,6 +1051,12 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
         harmonicity=Math.min(1,avg.harmonicity/0.42);
     var scores={
       edm:0.20*tempoDance+0.14*Math.min(1,bass/0.34)+0.12*Math.min(1,energy/0.28)+0.10*Math.min(1,high/0.24)+0.16*regularity+0.10*flux+0.08*onset+0.06*beatStrength+0.04*transient,
+      country:0.22*fit(avg.bpm,75,130,38)+0.18*Math.min(1,mid/0.44)+0.16*Math.min(1,harmonicity/0.55)+0.14*(1-Math.min(1,bass/0.48))+0.12*Math.min(1,high/0.3)+0.10*regularity+0.08*(1-Math.min(1,energy/0.4)),
+      classical:0.20*fit(avg.bpm,50,130,48)+0.24*Math.min(1,harmonicity/0.65)+0.18*Math.min(1,mid/0.5)+0.16*(1-Math.min(1,onset/0.75))+0.12*(1-Math.min(1,transient/0.7))+0.10*(1-Math.min(1,bass/0.48)),
+      reggae:0.18*fit(avg.bpm,65,105,30)+0.22*Math.min(1,bass/0.4)+0.16*Math.min(1,mid/0.44)+0.14*(1-Math.min(1,high/0.4))+0.12*(1-Math.min(1,regularity/0.9))+0.10*Math.min(1,beatStrength/0.45)+0.08*(1-Math.min(1,energy/0.45)),
+      funk:0.18*fit(avg.bpm,90,130,32)+0.20*Math.min(1,bass/0.4)+0.18*Math.min(1,mid/0.45)+0.14*Math.min(1,high/0.32)+0.12*regularity+0.10*Math.min(1,beatStrength/0.45)+0.08*harmonicity,
+      ambient:0.20*(1-Math.min(1,energy/0.42))+0.18*(1-Math.min(1,onset/0.8))+0.18*(1-Math.min(1,flux/0.8))+0.16*Math.min(1,harmonicity/0.65)+0.14*(1-Math.min(1,beatStrength/0.55))+0.14*(1-Math.min(1,bass/0.5)),
+      latin:0.20*fit(avg.bpm,85,150,40)+0.18*Math.min(1,beatStrength/0.48)+0.16*Math.min(1,transient/0.45)+0.14*Math.min(1,bass/0.4)+0.12*Math.min(1,high/0.32)+0.12*Math.min(1,onset/0.8)+0.08*regularity,
       hiphop:0.20*tempoHip+0.18*Math.min(1,bass/0.36)+0.17*Math.min(1,mid/0.44)+0.08*(1-Math.min(1,high/0.36))+0.08*(1-regularity)+0.10*transient+0.08*beatStrength+0.06*harmonicity-0.03*onset,
       jazz:0.22*fit(avg.bpm,65,115,30)+0.22*Math.min(1,mid/0.44)+0.16*(1-Math.min(1,high/0.3))+0.15*(1-Math.min(1,energy/0.32))+0.12*harmonicity+0.07*(1-onset)+0.06*(1-regularity),
       rock:0.20*tempoRock+0.18*Math.min(1,mid/0.42)+0.17*Math.min(1,high/0.27)+0.16*Math.min(1,energy/0.28)+0.08*flux+0.08*onset+0.07*harmonicity+0.06*beatStrength,
@@ -1042,11 +1066,17 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var ranked=Object.keys(scores).map(function(k){return {genre:k,score:scores[k]};}).sort(function(a,b){return b.score-a.score;});
     var best=ranked[0], margin=best.score-ranked[1].score;
     if(genreSegments.length<3) return;
-    var musicEvidence=Math.max(scores.edm,scores.hiphop,scores.jazz,scores.rock,scores.pop,scores.retro);
+    var musicEvidence=Math.max(scores.edm,scores.hiphop,scores.jazz,scores.rock,scores.pop,scores.retro,scores.country,scores.classical,scores.reggae,scores.funk,scores.ambient,scores.latin);
     var voiceEvidence=Math.min(1,Math.max(0,(mid-0.34)*2.3))*0.34 + (1-Math.min(1,bass/0.38))*0.16 + (1-Math.min(1,beatStrength/0.65))*0.18 + (1-Math.min(1,regularity/0.65))*0.14 + (1-Math.min(1,flux/0.8))*0.10 + (1-onset)*0.08;
     var proposed = '';
     var genreFits = {
       edm: tempoDance >= 0.42 && regularity >= 0.28 && beatStrength >= 0.22 && (flux >= 0.16 || onset >= 0.22),
+      country: fit(avg.bpm,75,130,38) >= 0.38 && mid >= 0.18 && harmonicity >= 0.18 && bass <= 0.55,
+      classical: fit(avg.bpm,50,130,48) >= 0.30 && harmonicity >= 0.28 && onset < 0.78 && transient < 0.72,
+      reggae: fit(avg.bpm,65,105,30) >= 0.32 && bass >= 0.18 && high <= 0.48,
+      funk: fit(avg.bpm,90,130,32) >= 0.30 && bass >= 0.18 && mid >= 0.18 && high >= 0.10,
+      ambient: energy <= 0.48 && onset < 0.72 && flux < 0.75 && harmonicity >= 0.12,
+      latin: fit(avg.bpm,85,150,40) >= 0.32 && beatStrength >= 0.18 && (transient >= 0.12 || onset >= 0.22),
       hiphop: tempoHip >= 0.28 && bass >= 0.20 && (transient >= 0.12 || regularity <= 0.62),
       pop: tempoPop >= 0.38 && regularity >= 0.24 && energy >= 0.12,
       rock: tempoRock >= 0.30 && energy >= 0.18 && (high >= 0.16 || harmonicity >= 0.38),
