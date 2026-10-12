@@ -943,7 +943,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   }
   function estimateGenre(ts, playing) {
     if (!playing || trackAnalyzed || !audio || audio.plain || audio.bypass || !nodes.an || !ctx) return;
-    if (genreSegments.length >= 12) { trackAnalyzed = true; return; }
+    if (genreSegments.length >= 12) genreSegments = genreSegments.slice(-3);
     if (ts - lastGenreSample < 100) return;
     lastGenreSample = ts;
     var an = nodes.an, n = an.frequencyBinCount, sr = ctx.sampleRate, hzPerBin = sr / an.fftSize;
@@ -1040,7 +1040,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     /* Keep the last confident label through ambiguous sections instead of reverting to Generic. */
     stableTheme = detectedGenre;
     if(themeMode==='auto') applyTheme(stableTheme);
-    trackAnalyzed = genreSegments.length >= 8;
+    trackAnalyzed = detectedGenre !== 'generic';
+    /* If the current sample window is inconclusive, keep listening and retry with fresh audio shortly. */
+    if (!trackAnalyzed && genreSegments.length >= 8) genreSegments = genreSegments.slice(-3);
   }
   function drawViz() {
     var dpr = Math.min(window.devicePixelRatio || 1, 2), W = viz.clientWidth, H = viz.clientHeight;
