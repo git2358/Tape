@@ -517,6 +517,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     if (!t) return;
     teardown();
     resetGenreAnalysis();
+    if (themeMode !== 'auto') applyTheme(themeMode);
     curId = id; bag = bag.filter(function (x) { return x !== id; });
     var a = new Audio(); a.preload = 'auto'; a.playsInline = true; a.setAttribute('playsinline', ''); a.setAttribute('webkit-playsinline', '');
     a.preservesPitch = false; a.mozPreservesPitch = false; a.webkitPreservesPitch = false;
@@ -579,6 +580,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   function showIdleTheme() {
     resetGenreAnalysis();
     applyTheme('generic');
+    $('#genreReadout').textContent = 'GENERIC · BPM --';
   }
   function stopAtEnd() { if (audio) { audio.a.pause(); audio.a.currentTime = 0; if (audio.fxA && audio.fxA !== audio.a) { audio.fxA.pause(); audio.fxA.currentTime = 0; } if (audio.bgA && audio.bgA !== audio.a) { audio.bgA.pause(); audio.bgA.currentTime = 0; } } showIdleTheme(); say(''); }
   function next(auto) {
@@ -1244,8 +1246,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   /* ---------- start ---------- */
   loadSettings();
   $('#themeSelect').value = themeMode;
-  applyTheme(themeMode === 'auto' ? 'generic' : themeMode);
-  $('#themeSelect').addEventListener('change', function () { themeMode = this.value; if (themeMode === 'auto') applyTheme(audio && audio.a && !audio.a.paused && !audio.a.ended ? detectedGenre : 'generic'); else applyTheme(audio && audio.a && !audio.a.paused && !audio.a.ended ? themeMode : 'generic'); saveSettings(); }); applyTape(); updateChips(); setLabels(); renderList();
+  applyTheme('generic');
+  $('#genreReadout').textContent = 'GENERIC · BPM --';
+  $('#themeSelect').addEventListener('change', function () { themeMode = this.value; var playing = !!(audio && audio.a && !audio.a.paused && !audio.a.ended); applyTheme(playing ? (themeMode === 'auto' ? detectedGenre : themeMode) : 'generic'); if (!playing) $('#genreReadout').textContent = 'GENERIC · BPM --'; saveSettings(); }); applyTape(); updateChips(); setLabels(); renderList();
   document.querySelectorAll('[data-viz]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.getAttribute('data-viz') === vizMode)); });
   setVol();
   requestAnimationFrame(frame);
