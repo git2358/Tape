@@ -359,7 +359,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   var calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* ---------- state ---------- */
-  var tracks = [], curId = null, nextId = 1, shuffle = false, repeat = 'off', tapeOn = true, mixOn = false, mixDeck = null, mixTransition = null;
+  var tracks = [], curId = null, nextId = 1, shuffle = false, repeat = 'off', tapeOn = true, mixOn = false, mixDeck = null, mixTransition = null, mixEndScheduled = false;
   var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic', trackAnalyzed = false, genreSegments = [], candidateGenre = '', candidateGenreWins = 0, segmentTotals = {bass:0,mid:0,high:0,energy:0,spectralFlux:0,beatStrength:0,lowTransient:0,harmonicity:0,onsets:0}, featureTotals = {bass:0,mid:0,high:0,energy:0}, prevSpectrum = null, fluxHistory = [], lastOnset = 0, trackAnalysisToken = 0, fullTrackAnalysisActive = false;
   var bag = [], hist = [], audio = null, ctx = null, nodes = {}, vizMode = 'spectrum', muted = false, limiterOn = true;
   var needsNativeBackgroundFallback = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -527,6 +527,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   function playId(id, autoplay, noHist, plain) {
     var t = tracks.find(function (x) { return x.id === id; });
     if (!t) return;
+    mixEndScheduled = false;
     discardMixDeck();
     teardown();
     resetGenreAnalysis();
@@ -634,6 +635,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     a.setAttribute('playsinline', ''); a.setAttribute('webkit-playsinline', '');
     if (/^https?:/i.test(t.src)) a.crossOrigin = 'anonymous';
     a.src = t.src;
+    a.playbackRate = tapeOn ? 1 + (+ui.speed.value) / 100 : 1;
     try {
       var node = ctx.createMediaElementSource(a), gain = ctx.createGain();
       gain.gain.value = 0; node.connect(gain); gain.connect(tapeOn ? nodes.input : nodes.comp);
@@ -671,7 +673,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   function promoteMixDeck() {
     if (!mixTransition || !mixDeck || !audio) return;
     var deck = mixDeck, old = audio, t = tracks.find(function (x) { return x.id === deck.id; });
-    mixDeck = null; mixTransition = null;
+    mixDeck = null; mixTransition = null; mixEndScheduled = false;
     try { old.a.pause(); old.a.removeAttribute('src'); old.a.load(); } catch (e) {}
     try { if (old.node) old.node.disconnect(); } catch (e) {}
     try { if (old.mixGain) old.mixGain.disconnect(); } catch (e) {}
@@ -698,12 +700,13 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       if (id != null) prepareMixDeck(id);
     }
     if (mixDeck && mixDeck.ready && now >= start) beginMixTransition(Math.min(fade, Math.max(0.5, end - now)));
-    if (!mixDeck && now >= end) {
+    if (!mixDeck && now >= end && !mixEndScheduled) {
+      mixEndScheduled = true;
       if (audio.mixGain && ctx) {
         audio.mixGain.gain.cancelScheduledValues(ctx.currentTime);
         audio.mixGain.gain.setTargetAtTime(0, ctx.currentTime, 0.2);
       }
-      setTimeout(function () { if (mixOn && audio && audio.a.currentTime >= end) stopAtEnd(); }, 900);
+      setTimeout(function () { if (mixOn && audio && audio.a.currentTime >= end) { if (!audio.mixGain) next(true); else stopAtEnd(); } }, 900);
     }
   }
 
@@ -1346,7 +1349,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   $('#kPrev').addEventListener('click', function () { initAudio(); prev(); });
   hold($('#kRew'), -1); hold($('#kFf'), 1);
   $('#mShuf').addEventListener('click', function () { shuffle = !shuffle; bag = shuffle ? tracks.map(function (t) { return t.id; }).filter(function (x) { return x !== curId; }) : []; updateChips(); saveSettings(); });
-  $('#mMix').addEventListener('click', function () { mixOn = !mixOn; discardMixDeck(); if (audio && audio.mixGain && ctx) audio.mixGain.gain.setTargetAtTime(1, ctx.currentTime, 0.03); if (mixOn && audio && isFinite(audio.a.duration) && audio.a.duration > 0) { try { audio.a.currentTime = audio.a.duration * 0.2; } catch (e) {} } updateChips(); saveSettings(); });
+  $('#mMix').addEventListener('click', function () { mixOn = !mixOn; mixEndScheduled = false; discardMixDeck(); if (audio && audio.mixGain && ctx) audio.mixGain.gain.setTargetAtTime(1, ctx.currentTime, 0.03); if (mixOn && audio && isFinite(audio.a.duration) && audio.a.duration > 0) { try { audio.a.currentTime = audio.a.duration * 0.2; } catch (e) {} } updateChips(); saveSettings(); });
   $('#mRep').addEventListener('click', function () { repeat = repeat === 'off' ? 'all' : repeat === 'all' ? 'one' : 'off'; updateChips(); saveSettings(); });
   $('#mTape').addEventListener('click', function () { tapeOn = !tapeOn; applyTape(); saveSettings(); });
   $('#mLimiter').addEventListener('click', function () { limiterOn = !limiterOn; applyTape(); saveSettings(); });
