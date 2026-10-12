@@ -206,7 +206,7 @@ input[type=range]::-moz-range-thumb { width: 12px; height: 22px; border-radius: 
 .btn:hover { border-color: #5a5248; }
 .btn.go { background: linear-gradient(var(--accent-hi), var(--accent)); border-color: #00000080; color: #1a0e06; font-weight: 600; }
 .list { list-style: none; margin: 0; padding: 0; max-height: 440px; overflow-y: auto; border: 1px solid #000; border-radius: 4px; background: #0f0e0d; box-shadow: inset 0 2px 8px #000a; }
-.row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto auto auto; align-items: center; gap: 4px 6px; padding: 4px 6px 4px 8px; border-bottom: 1px solid #1c1a18; }
+.row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto auto auto auto auto; align-items: center; gap: 4px 6px; padding: 4px 6px 4px 8px; border-bottom: 1px solid #1c1a18; }
 .row:last-child { border-bottom: 0; }
 .row.cur { background: #2a1a10; }
 .row.over { box-shadow: inset 0 2px 0 var(--vfd); }
@@ -909,10 +909,12 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       nm.title = t.title;
       nm.addEventListener('click', function () { initAudio(); if (ctx.state === 'suspended') ctx.resume(); if (shuffle && curId != null && curId !== t.id) hist.push(curId); playId(t.id, true, true); });
       var du = document.createElement('span'); du.className = 'dur'; du.textContent = t.dur ? fmt(t.dur) : '';
+      var dl = mini('↓', 'Download processed MP3', function () { downloadTrack(t.id, dl); });
+      dl.classList.add('download');
       var up = mini('▲', 'Move up', function () { moveBy(t.id, -1); });
       var dn = mini('▼', 'Move down', function () { moveBy(t.id, 1); });
       var rm = mini('✕', 'Remove', function () { removeTrack(t.id); });
-      [ix, nm, du, up, dn, rm].forEach(function (el) { li.appendChild(el); });
+      [ix, nm, du, dl, up, dn, rm].forEach(function (el) { li.appendChild(el); });
       ul.appendChild(li);
     });
     var c = ul.querySelector('.cur'); if (c && c.scrollIntoView) { /* keep list position stable */ }
@@ -1327,6 +1329,106 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     for (var i = 0; i < len; i++) for (var k = 0; k < ch; k++) { var s = Math.max(-1, Math.min(1, d[k][i])); v.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7fff, true); o += 2; }
     return new Blob([ab], { type: 'audio/wav' });
   }
+  var lamePromise = null, exportingTracks = {};
+  function loadMp3Encoder() {
+    if (window.lamejs && window.lamejs.Mp3Encoder) return Promise.resolve(window.lamejs);
+    if (lamePromise) return lamePromise;
+    lamePromise = new Promise(function (resolve, reject) {
+      var script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/lamejs@1.2.1/lame.min.js';
+      script.onload = function () {
+        if (window.lamejs && window.lamejs.Mp3Encoder) resolve(window.lamejs);
+        else { lamePromise = null; reject(new Error('MP3 encoder did not load.')); }
+      };
+      script.onerror = function () { lamePromise = null; reject(new Error('Could not load the MP3 encoder. Check your internet connection and try again.')); };
+      document.head.appendChild(script);
+    });
+    return lamePromise;
+  }
+  function renderProcessedTrack(track) {
+    return fetch(track.src).then(function (response) {
+      if (!response.ok) throw new Error('Could not read this track (' + response.status + ').');
+      return response.arrayBuffer();
+    }).then(function (data) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) throw new Error('Web Audio is not available in this browser.');
+      var decoder = new AC();
+      return decoder.decodeAudioData(data).then(function (decoded) {
+        try { decoder.close(); } catch (e) {}
+        var rate = tapeOn ? 1 + (+ui.speed.value) / 100 : 1;
+        var sr = 44100, duration = decoded.duration / rate;
+        if (!isFinite(duration) || duration <= 0 || duration > 14400) throw new Error('This track has an unsupported duration.');
+        var OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+        if (!OC) throw new Error('Offline audio rendering is not supported in this browser.');
+        var frames = Math.ceil(duration * sr);
+        var oc = new OC(2, frames, sr);
+        var source = oc.createBufferSource(); source.buffer = decoded; source.playbackRate.value = rate;
+        var input = oc.createGain(); input.gain.value = 0.9;
+        var hp = oc.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 35; hp.Q.value = 0.7;
+        var warm = oc.createBiquadFilter(); warm.type = 'peaking'; warm.frequency.value = 150; warm.Q.value = 0.7; warm.gain.value = tapeOn ? +ui.warm.value : 0;
+        var pres = oc.createBiquadFilter(); pres.type = 'peaking'; pres.frequency.value = 3000; pres.Q.value = 0.7; pres.gain.value = tapeOn ? +ui.clar.value : 0;
+        var lp1 = oc.createBiquadFilter(); lp1.type = 'lowpass'; lp1.frequency.value = tapeOn ? +ui.cut.value * 1000 : 22000; lp1.Q.value = 0.6;
+        var lp2 = oc.createBiquadFilter(); lp2.type = 'lowpass'; lp2.frequency.value = tapeOn ? +ui.cut.value * 1000 : 22000; lp2.Q.value = 0.6;
+        var sat = oc.createWaveShaper(); sat.oversample = '2x'; sat.curve = makeCurve(tapeOn ? +ui.sat.value : 0);
+        var comp = oc.createDynamicsCompressor(); comp.threshold.value = limiterOn ? -12 : 0; comp.knee.value = 0; comp.ratio.value = limiterOn ? 20 : 1; comp.attack.value = limiterOn ? 0.003 : 0.01; comp.release.value = limiterOn ? 0.12 : 0.25;
+        var safety = oc.createDynamicsCompressor(); safety.threshold.value = -1.5; safety.knee.value = 0; safety.ratio.value = 20; safety.attack.value = 0.001; safety.release.value = 0.08;
+        if (tapeOn) {
+          source.connect(input); input.connect(hp); hp.connect(warm); warm.connect(pres); pres.connect(lp1); lp1.connect(lp2); lp2.connect(sat); sat.connect(comp);
+          var noiseBuffer = oc.createBuffer(1, sr * 2, sr), noiseData = noiseBuffer.getChannelData(0);
+          for (var n = 0; n < noiseData.length; n++) noiseData[n] = Math.random() * 2 - 1;
+          var hiss = oc.createBufferSource(); hiss.buffer = noiseBuffer; hiss.loop = true;
+          var hissHP = oc.createBiquadFilter(); hissHP.type = 'highpass'; hissHP.frequency.value = 3500; hissHP.Q.value = 0.7;
+          var hissLP = oc.createBiquadFilter(); hissLP.type = 'lowpass'; hissLP.frequency.value = 12000; hissLP.Q.value = 0.7;
+          var hissGain = oc.createGain(); hissGain.gain.value = (+ui.hiss.value) / 100 * 0.03 * (limiterOn ? 0.25 : 1);
+          hiss.connect(hissHP); hissHP.connect(hissLP); hissLP.connect(hissGain); hissGain.connect(comp); hiss.start(0); hiss.stop(duration);
+        } else {
+          source.connect(comp);
+        }
+        comp.connect(safety); safety.connect(oc.destination); source.start(0);
+        return oc.startRendering();
+      });
+    });
+  }
+  function downloadTrack(id, button) {
+    var track = tracks.find(function (t) { return t.id === id; });
+    if (!track || exportingTracks[id]) return;
+    exportingTracks[id] = true;
+    var oldText = button.textContent;
+    button.disabled = true; button.textContent = '…'; button.title = 'Rendering processed MP3…';
+    say('Preparing ' + track.title + ' for MP3 export…');
+    loadMp3Encoder().then(function (lame) {
+      say('Applying tape effects to ' + track.title + '…');
+      return renderProcessedTrack(track).then(function (buffer) {
+        say('Encoding ' + track.title + ' as MP3…');
+        var encoder = new lame.Mp3Encoder(2, buffer.sampleRate, 192);
+        var left = buffer.getChannelData(0), right = buffer.getChannelData(1);
+        var chunks = [], block = 1152;
+        for (var i = 0; i < buffer.length; i += block) {
+          var end = Math.min(i + block, buffer.length), l = new Int16Array(end - i), r = new Int16Array(end - i);
+          for (var j = i; j < end; j++) {
+            var lv = Math.max(-1, Math.min(1, left[j])), rv = Math.max(-1, Math.min(1, right[j]));
+            l[j - i] = lv < 0 ? lv * 32768 : lv * 32767;
+            r[j - i] = rv < 0 ? rv * 32768 : rv * 32767;
+          }
+          var part = encoder.encodeBuffer(l, r); if (part.length) chunks.push(part);
+        }
+        var last = encoder.flush(); if (last.length) chunks.push(last);
+        var blob = new Blob(chunks, { type: 'audio/mpeg' });
+        var url = URL.createObjectURL(blob), link = document.createElement('a');
+        var filename = track.title.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim() || 'Cassette Track';
+        link.href = url; link.download = filename + ' (Cassette Walkman).mp3';
+        document.body.appendChild(link); link.click(); link.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+        say('Downloaded ' + filename + ' with tape effects baked in.');
+      });
+    }).catch(function (error) {
+      say('MP3 export failed: ' + (error && error.message ? error.message : 'unknown error') + ' Remote tracks must allow browser access (CORS).');
+    }).then(function () {
+      exportingTracks[id] = false;
+      button.disabled = false; button.textContent = oldText; button.title = 'Download processed MP3';
+    });
+  }
+
   function makeDemo() {
     var OC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     if (!OC) return Promise.reject(new Error('no offline audio'));
