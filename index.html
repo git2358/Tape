@@ -295,6 +295,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       <div class="vol"><span class="label">Volume</span><input type="range" id="vol" min="0" max="1" step="0.01" value="0.8" aria-label="Volume"><output id="oVol">80%</output><button class="btn reset" type="button" data-reset="vol" aria-label="Reset volume">Reset</button></div>
       <div class="modes">
         <button class="mode" id="mShuf" aria-pressed="false"><i></i>Shuffle</button>
+        <button class="mode" id="mMix" aria-pressed="false"><i></i>Mix</button>
         <button class="mode" id="mRep" aria-pressed="false"><i></i><span id="mRepT">Repeat off</span></button>
         <button class="mode" id="mTape" aria-pressed="true"><i></i>Tape sound</button>
         <button class="mode" id="mLimiter" aria-pressed="true"><i></i>AVL</button>
@@ -358,7 +359,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   var calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   /* ---------- state ---------- */
-  var tracks = [], curId = null, nextId = 1, shuffle = false, repeat = 'off', tapeOn = true;
+  var tracks = [], curId = null, nextId = 1, shuffle = false, repeat = 'off', tapeOn = true, mixOn = false, mixDeck = null, mixTransition = null;
   var themeMode = 'auto', detectedGenre = 'generic', detectedBpm = 0, genreConfidence = 0, lastGenreSample = 0, prevBass = 0, lastBeat = 0, beatIntervals = [], bpmHistory = [], themeSamples = 0, stableTheme = 'generic', trackAnalyzed = false, genreSegments = [], candidateGenre = '', candidateGenreWins = 0, segmentTotals = {bass:0,mid:0,high:0,energy:0,spectralFlux:0,beatStrength:0,lowTransient:0,harmonicity:0,onsets:0}, featureTotals = {bass:0,mid:0,high:0,energy:0}, prevSpectrum = null, fluxHistory = [], lastOnset = 0, trackAnalysisToken = 0, fullTrackAnalysisActive = false;
   var bag = [], hist = [], audio = null, ctx = null, nodes = {}, vizMode = 'spectrum', muted = false, limiterOn = true;
   var needsNativeBackgroundFallback = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -373,7 +374,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   /* ---------- settings ---------- */
   function saveSettings() {
     try {
-      var o = { tapeOn: tapeOn, shuffle: shuffle, repeat: repeat, muted: muted, vizMode: vizMode, limiterOn: limiterOn, themeMode: themeMode };
+      var o = { tapeOn: tapeOn, shuffle: shuffle, repeat: repeat, mixOn: mixOn, muted: muted, vizMode: vizMode, limiterOn: limiterOn, themeMode: themeMode };
       Object.keys(ui).forEach(function (k) { if (k !== 'seek') o[k] = ui[k].value; });
       localStorage.setItem('cassette-walkman', JSON.stringify(o));
     } catch (e) {}
@@ -383,7 +384,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       var o = JSON.parse(localStorage.getItem('cassette-walkman') || 'null');
       if (!o) return;
       Object.keys(ui).forEach(function (k) { if (k !== 'seek' && o[k] != null) ui[k].value = o[k]; });
-      tapeOn = o.tapeOn !== false; shuffle = !!o.shuffle; repeat = o.repeat || 'off'; muted = !!o.muted; vizMode = o.vizMode || 'spectrum'; limiterOn = o.limiterOn !== false; themeMode = o.themeMode || 'auto';
+      tapeOn = o.tapeOn !== false; shuffle = !!o.shuffle; repeat = o.repeat || 'off'; mixOn = !!o.mixOn; muted = !!o.muted; vizMode = o.vizMode || 'spectrum'; limiterOn = o.limiterOn !== false; themeMode = o.themeMode || 'auto';
     } catch (e) {}
   }
 
@@ -448,7 +449,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     if (!audio || !audio.node || !ctx || !nodes) return;
     try {
       audio.node.disconnect();
-      if (tapeOn) {
+      if (audio.mixGain) { audio.mixGain.disconnect(); audio.node.connect(audio.mixGain); audio.mixGain.connect(tapeOn ? nodes.input : nodes.comp); }
+      else if (tapeOn) {
         audio.node.connect(nodes.input);
       } else {
         /* Bypass tape coloration, but keep the limiter, safety stage,
@@ -517,6 +519,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       try { el.removeAttribute('src'); el.load(); } catch (e) {}
     });
     try { if (old.node) old.node.disconnect(); } catch (e) {}
+    try { if (old.mixGain) old.mixGain.disconnect(); } catch (e) {}
     audio = null;
     updateHiss();
   }
@@ -524,6 +527,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   function playId(id, autoplay, noHist, plain) {
     var t = tracks.find(function (x) { return x.id === id; });
     if (!t) return;
+    discardMixDeck();
     teardown();
     resetGenreAnalysis();
     if (themeMode !== 'auto') applyTheme(themeMode);
@@ -536,6 +540,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var node = null;
     if (!plain) { initAudio(); try { node = ctx.createMediaElementSource(a); } catch (e) { node = null; } }
     var useEffects = !plain && !!node;
+    var mixGain = useEffects && ctx ? ctx.createGain() : null;
+    if (mixGain) mixGain.gain.value = 1;
     var bgA = null;
     /* iOS can suspend Web Audio when Safari is backgrounded. Keep a second, native media
        element playing quietly while visible, ready to take over without starting a new
@@ -546,11 +552,11 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       bgA.preservesPitch = false; bgA.mozPreservesPitch = false; bgA.webkitPreservesPitch = false;
       bgA.src = t.src; bgA.volume = 0.001;
     }
-    audio = { a: a, fxA: useEffects ? a : null, bgA: bgA, node: node, plain: !useEffects, bypass: false, id: id, lastPosition: 0 };
+    audio = { a: a, fxA: useEffects ? a : null, bgA: bgA, node: node, mixGain: mixGain, plain: !useEffects, bypass: false, id: id, lastPosition: 0 };
     preanalyzeTrack(t, id);
     if (audio.plain) a.volume = Math.max(0, Math.min(1, muted ? 0 : +ui.vol.value * duck));
     else routeAudio();
-    a.addEventListener('loadedmetadata', function () { if (isFinite(a.duration) && a.duration > 0) { t.dur = a.duration; renderList(); } });
+    a.addEventListener('loadedmetadata', function () { if (isFinite(a.duration) && a.duration > 0) { t.dur = a.duration; if (mixOn && audio && audio.a === a && a.currentTime < a.duration * 0.2) { try { a.currentTime = a.duration * 0.2; } catch (e) {} } renderList(); } });
     a.addEventListener('playing', function () { updateHiss(); failStreak = 0; if ('mediaSession' in navigator && audio && audio.a === a) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} } });
     a.addEventListener('pause', function () { updateHiss(); if ('mediaSession' in navigator && audio && audio.a === a && (!audio.bgA || audio.bgA.paused)) { try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {} } });
     a.addEventListener('ended', function () { updateHiss(); if (audio && audio.a === a) next(true); });
@@ -592,7 +598,115 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     applyTheme('generic');
     $('#genreReadout').textContent = 'GENERIC · BPM --';
   }
-  function stopAtEnd() { if (audio) { audio.a.pause(); audio.a.currentTime = 0; if (audio.fxA && audio.fxA !== audio.a) { audio.fxA.pause(); audio.fxA.currentTime = 0; } if (audio.bgA && audio.bgA !== audio.a) { audio.bgA.pause(); audio.bgA.currentTime = 0; } } showIdleTheme(); say(''); }
+  function stopAtEnd() { discardMixDeck(); if (audio) { audio.a.pause(); audio.a.currentTime = 0; if (audio.fxA && audio.fxA !== audio.a) { audio.fxA.pause(); audio.fxA.currentTime = 0; } if (audio.bgA && audio.bgA !== audio.a) { audio.bgA.pause(); audio.bgA.currentTime = 0; } } showIdleTheme(); say(''); }
+  function discardMixDeck() {
+    mixTransition = null;
+    if (!mixDeck) return;
+    var d = mixDeck; mixDeck = null;
+    try { d.a.pause(); d.a.removeAttribute('src'); d.a.load(); } catch (e) {}
+    try { if (d.node) d.node.disconnect(); } catch (e) {}
+    try { if (d.gain) d.gain.disconnect(); } catch (e) {}
+  }
+  function chooseMixNextId() {
+    if (!tracks.length) return null;
+    if (repeat === 'one' && curId != null) return curId;
+    var id = null;
+    if (shuffle) {
+      bag = bag.filter(function (x) { return tracks.some(function (t) { return t.id === x; }) && (tracks.length === 1 || x !== curId); });
+      if (!bag.length) {
+        if (repeat !== 'all') return null;
+        bag = tracks.map(function (t) { return t.id; }).filter(function (x) { return tracks.length === 1 || x !== curId; });
+      }
+      if (bag.length) id = bag.splice(Math.floor(Math.random() * bag.length), 1)[0];
+    } else {
+      var i = idx() + 1;
+      if (i < tracks.length) id = tracks[i].id;
+      else if (repeat === 'all') id = tracks[0].id;
+    }
+    if (id != null && curId != null) hist.push(curId);
+    return id;
+  }
+  function prepareMixDeck(id) {
+    if (mixDeck || !mixOn || !ctx || !nodes.input) return;
+    var t = tracks.find(function (x) { return x.id === id; });
+    if (!t) return;
+    var a = new Audio(); a.preload = 'auto'; a.playsInline = true;
+    a.setAttribute('playsinline', ''); a.setAttribute('webkit-playsinline', '');
+    if (/^https?:/i.test(t.src)) a.crossOrigin = 'anonymous';
+    a.src = t.src;
+    try {
+      var node = ctx.createMediaElementSource(a), gain = ctx.createGain();
+      gain.gain.value = 0; node.connect(gain); gain.connect(tapeOn ? nodes.input : nodes.comp);
+      mixDeck = { id:id, a:a, node:node, gain:gain, ready:false };
+      a.addEventListener('loadedmetadata', function () {
+        if (!mixDeck || mixDeck.a !== a || !isFinite(a.duration) || a.duration <= 0) return;
+        t.dur = a.duration;
+        try { a.currentTime = a.duration * 0.2; } catch (e) {}
+        mixDeck.ready = true;
+      });
+      a.addEventListener('error', function () {
+        if (mixDeck && mixDeck.a === a) { discardMixDeck(); say('Mix could not load the next track; continuing without overlap.'); }
+      });
+      a.load();
+    } catch (e) { try { a.pause(); } catch (x) {} mixDeck = null; }
+  }
+  function beginMixTransition(duration) {
+    if (!mixDeck || !mixDeck.ready || !audio || !ctx || mixTransition || !audio.mixGain) return;
+    var deck = mixDeck, oldGain = audio.mixGain;
+    mixTransition = { id:deck.id, deck:deck, startedAt:0, duration:duration, waiting:true };
+    var result = deck.a.play();
+    function startFade() {
+      if (!mixTransition || mixTransition.deck !== deck || !audio) return;
+      var now = ctx.currentTime;
+      mixTransition.startedAt = now; mixTransition.waiting = false;
+      oldGain.gain.cancelScheduledValues(now); deck.gain.gain.cancelScheduledValues(now);
+      oldGain.gain.setValueAtTime(oldGain.gain.value, now);
+      deck.gain.gain.setValueAtTime(0, now);
+      oldGain.gain.linearRampToValueAtTime(0, now + duration);
+      deck.gain.gain.linearRampToValueAtTime(1, now + duration);
+    }
+    if (result && result.then) result.then(startFade).catch(function () { if (mixTransition && mixTransition.deck === deck) discardMixDeck(); });
+    else startFade();
+  }
+  function promoteMixDeck() {
+    if (!mixTransition || !mixDeck || !audio) return;
+    var deck = mixDeck, old = audio, t = tracks.find(function (x) { return x.id === deck.id; });
+    mixDeck = null; mixTransition = null;
+    try { old.a.pause(); old.a.removeAttribute('src'); old.a.load(); } catch (e) {}
+    try { if (old.node) old.node.disconnect(); } catch (e) {}
+    try { if (old.mixGain) old.mixGain.disconnect(); } catch (e) {}
+    if (old.bgA) { try { old.bgA.pause(); old.bgA.removeAttribute('src'); old.bgA.load(); } catch (e) {} }
+    audio = { a:deck.a, fxA:deck.a, bgA:null, node:deck.node, mixGain:deck.gain, plain:false, bypass:false, id:deck.id, lastPosition:deck.a.currentTime };
+    curId = deck.id;
+    deck.a.addEventListener('ended', function () { if (audio && audio.a === deck.a) next(true); });
+    resetGenreAnalysis();
+    if (t) preanalyzeTrack(t, t.id);
+    renderList(); setLabels(); updateHiss();
+  }
+  function updateMixPlayback(now, dur, playing) {
+    if (!mixOn || !audio || !playing || !isFinite(dur) || dur <= 0) return;
+    var end = dur * 0.8;
+    if (mixTransition) {
+      if (mixTransition.waiting && now >= end) { try { audio.a.pause(); } catch (e) {} }
+      else if (!mixTransition.waiting && ctx.currentTime - mixTransition.startedAt >= mixTransition.duration) promoteMixDeck();
+      return;
+    }
+    var fade = Math.min(10, Math.max(4, dur * 0.06));
+    var start = end - fade;
+    if (now >= Math.max(dur * 0.2, start - fade * 1.5) && !mixDeck) {
+      var id = chooseMixNextId();
+      if (id != null) prepareMixDeck(id);
+    }
+    if (mixDeck && mixDeck.ready && now >= start) beginMixTransition(Math.min(fade, Math.max(0.5, end - now)));
+    if (!mixDeck && now >= end) {
+      if (audio.mixGain && ctx) {
+        audio.mixGain.gain.cancelScheduledValues(ctx.currentTime);
+        audio.mixGain.gain.setTargetAtTime(0, ctx.currentTime, 0.2);
+      }
+      setTimeout(function () { if (mixOn && audio && audio.a.currentTime >= end) stopAtEnd(); }, 900);
+    }
+  }
+
   function next(auto) {
     if (!tracks.length) return;
     if (auto && repeat === 'one' && audio) { audio.a.currentTime = 0; audio.a.play().catch(function () {}); return; }
@@ -799,6 +913,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     $('#cSpd').classList.toggle('on', tapeOn);
     $('#cSpd').textContent = (tapeOn ? '+' + (+ui.speed.value).toFixed(1) : '+0.0') + '%';
     $('#mShuf').setAttribute('aria-pressed', String(shuffle));
+    $('#mMix').setAttribute('aria-pressed', String(mixOn));
     $('#mRep').setAttribute('aria-pressed', String(repeat !== 'off'));
     $('#mRepT').textContent = repeat === 'off' ? 'Repeat off' : repeat === 'all' ? 'Repeat all' : 'Repeat one';
   }
@@ -1126,6 +1241,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     estimateGenre(ts, playing);
     var dur = a && isFinite(a.duration) ? a.duration : 0, now = a ? a.currentTime : 0;
     var p = dur ? Math.min(1, now / dur) : 0;
+    updateMixPlayback(now, dur, playing);
     var rs = lerp(25, 15, p), rt = lerp(15, 25, p);
     var mult = seekDir ? seekDir * 7 : (playing ? 1 : 0); if (calm) mult *= 0.4;
     var V = 42;
@@ -1230,6 +1346,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   $('#kPrev').addEventListener('click', function () { initAudio(); prev(); });
   hold($('#kRew'), -1); hold($('#kFf'), 1);
   $('#mShuf').addEventListener('click', function () { shuffle = !shuffle; bag = shuffle ? tracks.map(function (t) { return t.id; }).filter(function (x) { return x !== curId; }) : []; updateChips(); saveSettings(); });
+  $('#mMix').addEventListener('click', function () { mixOn = !mixOn; discardMixDeck(); if (audio && audio.mixGain && ctx) audio.mixGain.gain.setTargetAtTime(1, ctx.currentTime, 0.03); if (mixOn && audio && isFinite(audio.a.duration) && audio.a.duration > 0) { try { audio.a.currentTime = audio.a.duration * 0.2; } catch (e) {} } updateChips(); saveSettings(); });
   $('#mRep').addEventListener('click', function () { repeat = repeat === 'off' ? 'all' : repeat === 'all' ? 'one' : 'off'; updateChips(); saveSettings(); });
   $('#mTape').addEventListener('click', function () { tapeOn = !tapeOn; applyTape(); saveSettings(); });
   $('#mLimiter').addEventListener('click', function () { limiterOn = !limiterOn; applyTape(); saveSettings(); });
