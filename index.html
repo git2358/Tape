@@ -1148,7 +1148,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     if (!OC) return Promise.reject(new Error('no offline audio'));
     var sr = 44100, bpm = 108, beat = 60 / bpm, bars = 8, dur = bars * 4 * beat + 1;
     var oc = new OC(2, Math.ceil(sr * dur), sr);
-    var master = oc.createGain(); master.gain.value = 0.7; master.connect(oc.destination);
+    var master = oc.createGain(); master.gain.value = 0.32; master.connect(oc.destination);
     var f = function (n) { return 440 * Math.pow(2, (n - 69) / 12); };
     var chords = [[57, 60, 64], [53, 57, 60], [48, 52, 55], [55, 59, 62]], roots = [45, 41, 36, 43];
     var nb = oc.createBuffer(1, sr, sr), nd = nb.getChannelData(0); for (var i = 0; i < sr; i++) nd[i] = Math.random() * 2 - 1;
@@ -1170,7 +1170,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     function kick(t0) {
       var o = oc.createOscillator(), g = oc.createGain();
       o.frequency.setValueAtTime(140, t0); o.frequency.exponentialRampToValueAtTime(42, t0 + 0.12);
-      g.gain.setValueAtTime(0.9, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.28);
+      g.gain.setValueAtTime(0.45, t0); g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.28);
       o.connect(g); g.connect(master); o.start(t0); o.stop(t0 + 0.3);
     }
     for (var bar = 0; bar < bars; bar++) {
@@ -1179,8 +1179,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       for (var b = 0; b < 4; b++) {
         var tb = t0 + b * beat;
         kick(tb);
-        if (b % 2 === 1) noise(tb, 0.16, 0.28, 1800);
-        for (var h = 0; h < 2; h++) noise(tb + h * beat / 2, 0.05, h ? 0.1 : 0.06, 7000);
+        if (b % 2 === 1) noise(tb, 0.16, 0.08, 1800);
+        for (var h = 0; h < 2; h++) noise(tb + h * beat / 2, 0.05, h ? 0.025 : 0.015, 7000);
         for (var e = 0; e < 2; e++) {
           var te = tb + e * beat / 2;
           tone('sawtooth', f(roots[ci] + (e && b % 2 ? 12 : 0)), te, beat / 2 * 0.9, 0.2, 420, 0);
