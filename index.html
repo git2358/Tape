@@ -944,7 +944,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   }
   function estimateGenre(ts, playing) {
     if (!playing || fullTrackAnalysisActive || !audio || audio.plain || audio.bypass || !nodes.an || !ctx) return;
-    if (genreSegments.length >= 12) genreSegments = genreSegments.slice(-3);
+    if (genreSegments.length >= 12) genreSegments = genreSegments.slice(-8);
     if (ts - lastGenreSample < 100) return;
     lastGenreSample = ts;
     var an = nodes.an, n = an.frequencyBinCount, sr = ctx.sampleRate, hzPerBin = sr / an.fftSize;
