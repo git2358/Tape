@@ -1500,7 +1500,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
               if (now - lastStatusAt > 12000 && isFinite(media.duration) && media.duration > 0) {
                 lastStatusAt = now;
                 var pct = Math.min(100, media.currentTime / media.duration * 100);
-                say('Exporting ' + filename + ' · ' + pct.toFixed(0) + '% · ' + fmt(media.currentTime / rate) + ' / ' + fmt(media.duration / rate) + ' · keep this tab open');
+                say('Exporting ' + filename + ' · ' + pct.toFixed(0) + '% · ' + fmt(media.currentTime / rate) + ' / ' + fmt(media.duration / rate) + ' · keep this tab open and in the foreground');
               }
             } catch (error) { fail(error); }
           };
@@ -1515,7 +1515,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
               context.resume().then(function () {
                 if (settled) return;
                 startedAt = Date.now();
-                say('Exporting ' + filename + ' · 0% · keep this tab open for about ' + fmt(outputDuration) + '.');
+                say('Exporting ' + filename + ' · 0% · keep this tab open and in the foreground for about ' + fmt(outputDuration) + '.');
                 return media.play();
               }).catch(fail);
             } catch (error) { fail(error); }
