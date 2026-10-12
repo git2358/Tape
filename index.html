@@ -744,6 +744,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       playId(id, true, true); return;
     }
     if (audio.a.paused) {
+      if (mixDeck && mixDeck.a && mixTransition && !mixTransition.waiting) mixDeck.a.play().catch(function () {});
       if (audio.bgA && document.hidden) {
         audio.a = audio.bgA; audio.bgA.muted = false; audio.bgA.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
         audio.bgA.play().catch(function () { say('Return to Safari and press Play to resume.'); });
@@ -766,6 +767,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       }
     } else {
       audio.a.pause();
+      if (mixDeck && mixDeck.a) mixDeck.a.pause();
       if (audio.fxA && audio.fxA !== audio.a) audio.fxA.pause();
       if (audio.bgA && audio.bgA !== audio.a) audio.bgA.pause();
     }
