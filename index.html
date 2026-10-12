@@ -503,9 +503,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     });
     if (bgA) {
       bgA.addEventListener('loadedmetadata', function () { if (isFinite(bgA.duration) && bgA.duration > 0 && (!t.dur || !isFinite(t.dur))) { t.dur = bgA.duration; renderList(); } });
-      bgA.addEventListener('playing', function () { if (audio && audio.a === bgA && 'mediaSession' in navigator) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} } });
-      bgA.addEventListener('pause', function () { if ('mediaSession' in navigator && audio && audio.a === bgA && bgA.paused && a.paused) { try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {} } });
-      bgA.addEventListener('ended', function () { if (audio && audio.a === bgA) next(true); });
+      bgA.addEventListener('playing', function () { updateHiss(); if (audio && audio.a === bgA && 'mediaSession' in navigator) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} } });
+      bgA.addEventListener('pause', function () { updateHiss(); if ('mediaSession' in navigator && audio && audio.a === bgA && bgA.paused && a.paused) { try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {} } });
+      bgA.addEventListener('ended', function () { updateHiss(); if (audio && audio.a === bgA) next(true); });
       bgA.addEventListener('error', function () { if (audio && audio.bgA === bgA && audio.a === bgA) { say('Background-safe audio could not start; return to Safari and press Play.'); } });
     }
     if (autoplay) {
