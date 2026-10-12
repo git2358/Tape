@@ -941,8 +941,9 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
           var meanZcr=sumZcr/Math.max(1,frameCount),rmsCv=Math.sqrt(m2Rms/Math.max(1,frameCount))/Math.max(.001,meanRms),zcrFit=Math.max(0,1-Math.abs(meanZcr-.085)/.11);
           var speechScore=.34*zcrFit+.25*Math.min(1,rmsCv/.85)+.22*Math.min(1,transitions/Math.max(1,frameCount*.055))+.19*Math.min(1,(activeFrames/Math.max(1,frameCount))/.78);
           var genre='generic',confidence=0;
-          if(speechScore>=.80&&meanRms>.006&&meanZcr>=.025&&meanZcr<=.22){genre='voice';confidence=speechScore;}
-          else if(voice>=.80&&best.score<.53&&mid>=.38&&beat<.42&&onset<.58){genre='voice';confidence=voice;}
+          var speechGate=meanRms>.008&&meanZcr>=.035&&meanZcr<=.17&&mid>=.40&&bass<=.42&&beat<.52&&regularity<.72&&onset<.72;
+          if(speechScore>=.78&&speechGate){genre='voice';confidence=speechScore;}
+          else if(voice>=.78&&best.score<.58&&mid>=.44&&bass<=.34&&beat<.36&&regularity<.62&&flux<.72&&onset<.52){genre='voice';confidence=voice;}
           else if(best.score>=.53&&margin>=.055){genre=best.genre;confidence=Math.min(.99,best.score);}
           if(segN>=2) {
             detectedGenre=genre; stableTheme=genre; genreConfidence=confidence;
@@ -1050,7 +1051,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     if(genreSegments.length<2) return;
     var voiceEvidence=Math.min(1,Math.max(0,(mid-0.34)*2.3))*0.34+(1-Math.min(1,bass/0.38))*0.16+(1-Math.min(1,beatStrength/0.65))*0.18+(1-Math.min(1,regularity/0.65))*0.14+(1-Math.min(1,flux/0.8))*0.10+(1-onset)*0.08;
     var proposed='';
-    if(voiceEvidence>=0.80&&best.score<0.53&&mid>=0.38&&beatStrength<0.42&&onset<0.58) proposed='voice';
+    if(voiceEvidence>=0.78&&best.score<0.58&&mid>=0.44&&bass<=0.34&&beatStrength<0.36&&regularity<0.62&&flux<0.72&&onset<0.52) proposed='voice';
     else if(genreSegments.length<4 ? best.score>=0.66&&margin>=0.14 : best.score>=0.53&&margin>=0.055) proposed=best.genre;
     /* Confirm a winner twice; require both a credible score and separation from runner-up. */
     if(proposed) {
