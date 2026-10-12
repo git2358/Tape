@@ -365,7 +365,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var nh = biq('highpass', 3500, 0.7), nl = biq('lowpass', 12000, 0.7), hissG = ctx.createGain(); hissG.gain.value = 0;
     ns.connect(nh); nh.connect(nl); nl.connect(hissG); hissG.connect(comp); ns.start();
 
-    var an = ctx.createAnalyser(); an.fftSize = 2048; an.smoothingTimeConstant = 0.72;
+    var an = ctx.createAnalyser(); an.fftSize = 2048; an.minDecibels = -80; an.maxDecibels = -6; an.smoothingTimeConstant = 0.28;
     var split = ctx.createChannelSplitter(2), aL = ctx.createAnalyser(), aR = ctx.createAnalyser();
     aL.fftSize = 512; aR.fftSize = 512; aL.smoothingTimeConstant = 0.6; aR.smoothingTimeConstant = 0.6;
     vol.connect(an); vol.connect(split); split.connect(aL, 0); split.connect(aR, 1); vol.connect(ctx.destination);
@@ -689,6 +689,13 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   }
   function mini(txt, label, fn) { var b = document.createElement('button'); b.className = 'mini'; b.textContent = txt; b.setAttribute('aria-label', label); b.addEventListener('click', fn); return b; }
 
+  function updateLimiterReadout() {
+    var lr = $('#limiterReadout');
+    if (!lr) return;
+    var reduction = nodes.comp ? nodes.comp.reduction : 0;
+    lr.textContent = limiterOn ? 'LIMITER ON · ' + (reduction < -0.5 ? reduction.toFixed(1) + ' dB reduction' : 'standing by') : 'LIMITER OFF';
+  }
+
   /* ---------- labels and chips ---------- */
   function setLabels() {
     var t = cur(), i = idx();
@@ -715,8 +722,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     $('#cLimiter').textContent = limiterOn ? 'LIMITER ON' : 'LIMITER OFF';
     $('#cLimiter').classList.toggle('on', limiterOn);
     $('#cLimiter').classList.toggle('off', !limiterOn);
-    var lr = $('#limiterReadout');
-    if (lr) { var reduction = nodes.comp ? nodes.comp.reduction : 0; lr.textContent = limiterOn ? 'LIMITER ON · ' + (reduction < -0.5 ? reduction.toFixed(1) + ' dB reduction' : 'standing by') : 'LIMITER OFF'; }
+    updateLimiterReadout();
     $('#cSpd').classList.toggle('on', tapeOn);
     $('#cSpd').textContent = (tapeOn ? '+' + (+ui.speed.value).toFixed(1) : '+0.0') + '%';
     $('#mShuf').setAttribute('aria-pressed', String(shuffle));
@@ -761,11 +767,11 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       l = 0.55 + 0.2 * Math.sin(t * 3.1) + Math.random() * 0.08; r = 0.55 + 0.2 * Math.sin(t * 2.7 + 1) + Math.random() * 0.08;
     }
     for (var q = 0; q < NB; q++) {
-      levels[q] = vals[q] > levels[q] ? vals[q] : Math.max(vals[q], levels[q] - dt * 2.2);
-      peaks[q] = Math.max(levels[q], peaks[q] - dt * 0.55);
+      levels[q] = vals[q] > levels[q] ? vals[q] : Math.max(vals[q], levels[q] - dt * 3.2);
+      peaks[q] = Math.max(levels[q], peaks[q] - dt * 1.35);
     }
-    lvlL = l > lvlL ? l : Math.max(l, lvlL - dt * 1.6); lvlR = r > lvlR ? r : Math.max(r, lvlR - dt * 1.6);
-    pkL = Math.max(lvlL, pkL - dt * 0.4); pkR = Math.max(lvlR, pkR - dt * 0.4);
+    lvlL = l > lvlL ? l : Math.max(l, lvlL - dt * 2.8); lvlR = r > lvlR ? r : Math.max(r, lvlR - dt * 2.8);
+    pkL = Math.max(lvlL, pkL - dt * 1.1); pkR = Math.max(lvlR, pkR - dt * 1.1);
   }
   function drawViz() {
     var dpr = Math.min(window.devicePixelRatio || 1, 2), W = viz.clientWidth, H = viz.clientHeight;
@@ -849,7 +855,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     $('#cMode').textContent = seekDir < 0 ? 'REW' : seekDir > 0 ? 'FF' : playing ? 'PLAY' : (a && now > 0 ? 'PAUSE' : 'STOP');
     $('#cMode').classList.toggle('on', playing || seekDir !== 0);
     $('#cTape').classList.toggle('on', tapeOn && !(audio && (audio.plain || audio.bypass)));
-    readSpectrum(dt, playing); drawViz();
+    readSpectrum(dt, playing); drawViz(); updateLimiterReadout();
     requestAnimationFrame(frame);
   }
 
