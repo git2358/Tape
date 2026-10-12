@@ -540,7 +540,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       bgA.preservesPitch = false; bgA.mozPreservesPitch = false; bgA.webkitPreservesPitch = false;
       bgA.src = t.src; bgA.volume = 0.001;
     }
-    audio = { a: a, fxA: useEffects ? a : null, bgA: bgA, node: node, plain: !useEffects, bypass: false, id: id };
+    audio = { a: a, fxA: useEffects ? a : null, bgA: bgA, node: node, plain: !useEffects, bypass: false, id: id, lastPosition: 0 };
     preanalyzeTrack(t, id);
     if (audio.plain) a.volume = Math.max(0, Math.min(1, muted ? 0 : +ui.vol.value * duck));
     else routeAudio();
@@ -1101,6 +1101,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   function frame(ts) {
     var dt = Math.min(0.1, (ts - lastTs) / 1000 || 0.016); lastTs = ts;
     var a = audio && audio.a, playing = !!a && !a.paused && !a.ended;
+    if (audio && playing && isFinite(a.currentTime)) audio.lastPosition = a.currentTime;
     estimateGenre(ts, playing);
     var dur = a && isFinite(a.duration) ? a.duration : 0, now = a ? a.currentTime : 0;
     var p = dur ? Math.min(1, now / dur) : 0;
@@ -1258,14 +1259,26 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       return;
     }
     /* Safari may pause the effects element as the page becomes hidden, before this
-       handler runs. Do not abort the handover in that case: the native element is
-       the background-safe fallback and must be allowed to take over. */
+       handler runs. Capture the current position before handing off to native playback.
+       If metadata is not ready yet, wait for it before seeking so Safari cannot start
+       the fallback from the beginning of the track. */
+    var position = 0;
     try {
-      var position = isFinite(fx.currentTime) ? fx.currentTime : 0;
+      position = isFinite(fx.currentTime) ? fx.currentTime : 0;
+      if ((!position || position < 0.25) && isFinite(current.lastPosition) && current.lastPosition > position) position = current.lastPosition;
       if (isFinite(bg.duration) && bg.duration > 0) position = Math.min(position, Math.max(0, bg.duration - 0.1));
-      bg.currentTime = position;
       bg.playbackRate = fx.playbackRate || 1;
     } catch (e) {}
+    function seekBackground() {
+      if (audio !== current || current.a !== bg || !document.hidden) return;
+      try {
+        var target = position;
+        if (isFinite(bg.duration) && bg.duration > 0) target = Math.min(target, Math.max(0, bg.duration - 0.1));
+        if (Math.abs(bg.currentTime - target) > 0.75) bg.currentTime = target;
+      } catch (e) {}
+    }
+    if (bg.readyState >= 1) seekBackground();
+    else bg.addEventListener('loadedmetadata', seekBackground, { once: true });
     current.a = bg;
     bg.muted = false;
     bg.volume = Math.max(0, Math.min(1, muted ? 0 : (+ui.vol.value) * duck));
