@@ -862,50 +862,49 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   /* Analyse a complete local track in the background while playback continues.
      This deliberately detects speech only; genre labels still use the live spectral analyser. */
   function preanalyzeVoice(track, id) {
+    /* Full-track decoding is available for local files. Remote streams may be large or
+       disallow CORS, so those continue to use the live analyser instead. */
+    if (!track.file || typeof track.file.arrayBuffer !== 'function' || track.file.size > 200 * 1024 * 1024) return;
     var token = ++trackAnalysisToken;
-    var sourcePromise;
-    if (track.file && typeof track.file.arrayBuffer === 'function') sourcePromise = track.file.arrayBuffer();
-    else if (/^https?:/i.test(track.src)) sourcePromise = fetch(track.src, { mode: 'cors' }).then(function (r) { if (!r.ok) throw new Error('fetch failed'); return r.arrayBuffer(); });
-    else return;
-    sourcePromise.then(function (data) {
+    track.file.arrayBuffer().then(function (data) {
       if (!ctx || curId !== id || token !== trackAnalysisToken) return;
       return ctx.decodeAudioData(data.slice(0)).then(function (buf) {
         if (!audio || audio.id !== id || curId !== id || token !== trackAnalysisToken || !buf.length) return;
         var channel = buf.getChannelData(0), sr = buf.sampleRate, hop = Math.max(1, Math.floor(sr * 0.02));
-        var frames = [], sumRms = 0, sumZcr = 0, active = 0;
-        for (var start = 0; start + hop < channel.length; start += hop) {
-          var energy = 0, crossings = 0, prev = channel[start];
-          for (var j = start; j < start + hop; j++) {
-            var v = channel[j]; energy += v * v;
-            if ((v >= 0 && prev < 0) || (v < 0 && prev >= 0)) crossings++;
-            prev = v;
+        var pos = 0, count = 0, meanRms = 0, m2Rms = 0, sumZcr = 0, active = 0, transitions = 0, prevActive = false;
+        function scanChunk() {
+          if (!audio || audio.id !== id || curId !== id || token !== trackAnalysisToken) return;
+          var stopAt = Math.min(channel.length, pos + sr * 5);
+          while (pos + hop < stopAt) {
+            var energy = 0, crossings = 0, prev = channel[pos];
+            for (var j = pos; j < pos + hop; j++) {
+              var v = channel[j]; energy += v * v;
+              if ((v >= 0 && prev < 0) || (v < 0 && prev >= 0)) crossings++;
+              prev = v;
+            }
+            var rms = Math.sqrt(energy / hop), zcr = crossings / hop, nowActive = rms > 0.008;
+            count++;
+            var delta = rms - meanRms; meanRms += delta / count; m2Rms += delta * (rms - meanRms);
+            sumZcr += zcr;
+            if (nowActive) active++;
+            if (nowActive !== prevActive) transitions++;
+            prevActive = nowActive;
+            pos += hop;
           }
-          var rms = Math.sqrt(energy / hop), zcr = crossings / hop;
-          frames.push({rms:rms,zcr:zcr});
-          sumRms += rms; sumZcr += zcr;
-          if (rms > 0.008) active++;
+          if (pos + hop < channel.length) { setTimeout(scanChunk, 0); return; }
+          if (count < 100) return;
+          var meanZcr = sumZcr / count, rmsCv = Math.sqrt(m2Rms / count) / Math.max(0.001, meanRms);
+          var zcrFit = Math.max(0, 1 - Math.abs(meanZcr - 0.085) / 0.11);
+          var speechScore = 0.34 * zcrFit +
+            0.25 * Math.min(1, rmsCv / 0.85) +
+            0.22 * Math.min(1, transitions / Math.max(1, count * 0.055)) +
+            0.19 * Math.min(1, (active / count) / 0.78);
+          if (speechScore >= 0.72 && meanRms > 0.006 && meanZcr >= 0.025 && meanZcr <= 0.22) {
+            detectedGenre = 'voice'; genreConfidence = speechScore; stableTheme = 'voice'; trackAnalyzed = true;
+            if (themeMode === 'auto') applyTheme('voice');
+          }
         }
-        if (frames.length < 100) return;
-        var meanRms = sumRms / frames.length, meanZcr = sumZcr / frames.length, variance = 0, silenceTransitions = 0, prevActive = false;
-        frames.forEach(function (f) {
-          variance += Math.pow(f.rms - meanRms, 2);
-          var nowActive = f.rms > Math.max(0.008, meanRms * 0.22);
-          if (nowActive !== prevActive) silenceTransitions++;
-          prevActive = nowActive;
-        });
-        var rmsCv = Math.sqrt(variance / frames.length) / Math.max(0.001, meanRms);
-        var activeRatio = active / frames.length;
-        var zcrFit = Math.max(0, 1 - Math.abs(meanZcr - 0.085) / 0.11);
-        var speechScore = 0.34 * zcrFit +
-          0.25 * Math.min(1, rmsCv / 0.85) +
-          0.22 * Math.min(1, silenceTransitions / Math.max(1, frames.length * 0.055)) +
-          0.19 * Math.min(1, activeRatio / 0.78);
-        /* A speech candidate should have speech-like zero crossings and changing syllabic
-           energy, not merely a quiet or instrumental full-length recording. */
-        if (speechScore >= 0.72 && meanRms > 0.006 && meanZcr >= 0.025 && meanZcr <= 0.22) {
-          detectedGenre = 'voice'; genreConfidence = speechScore; stableTheme = 'voice'; trackAnalyzed = true;
-          if (themeMode === 'auto') applyTheme('voice');
-        }
+        scanChunk();
       });
     }).catch(function () {});
   }
