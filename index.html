@@ -253,7 +253,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
         <button class="mode" id="mShuf" aria-pressed="false"><i></i>Shuffle</button>
         <button class="mode" id="mRep" aria-pressed="false"><i></i><span id="mRepT">Repeat off</span></button>
         <button class="mode" id="mTape" aria-pressed="true"><i></i>Tape sound</button>
-        <button class="mode" id="mLimiter" aria-pressed="true"><i></i>Auto volume limiter</button>
+        <button class="mode" id="mLimiter" aria-pressed="true"><i></i>AVL</button>
       </div>
     </section>
 
@@ -357,7 +357,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     var lp2 = biq('lowpass', 14500, 0.6);
     var sat = ctx.createWaveShaper(); sat.oversample = '2x'; sat.curve = makeCurve(0);
     var comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = limiterOn ? -6 : 0; comp.knee.value = 0; comp.ratio.value = limiterOn ? 20 : 1; comp.attack.value = limiterOn ? 0.003 : 0.01; comp.release.value = limiterOn ? 0.12 : 0.25;
+    comp.threshold.value = limiterOn ? -12 : 0; comp.knee.value = 0; comp.ratio.value = limiterOn ? 20 : 1; comp.attack.value = limiterOn ? 0.003 : 0.01; comp.release.value = limiterOn ? 0.12 : 0.25;
     var safety = ctx.createDynamicsCompressor(); safety.threshold.value = -1.5; safety.knee.value = 0; safety.ratio.value = 20; safety.attack.value = 0.001; safety.release.value = 0.08;
     var vol = ctx.createGain();
     input.connect(hp); hp.connect(warm); warm.connect(pres); pres.connect(lp1); lp1.connect(lp2); lp2.connect(sat); sat.connect(comp); comp.connect(safety); safety.connect(vol);
@@ -422,7 +422,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     $('#mTape').setAttribute('aria-pressed', String(tapeOn));
     $('#mLimiter').setAttribute('aria-pressed', String(limiterOn));
     if (nodes.an) nodes.an.maxDecibels = limiterOn ? -6 : -18;
-    if (nodes.comp) { nodes.comp.threshold.setTargetAtTime(limiterOn ? -6 : 0, ctx.currentTime, 0.03); nodes.comp.knee.setTargetAtTime(0, ctx.currentTime, 0.03); nodes.comp.ratio.setTargetAtTime(limiterOn ? 20 : 1, ctx.currentTime, 0.03); nodes.comp.attack.setTargetAtTime(limiterOn ? 0.003 : 0.01, ctx.currentTime, 0.03); nodes.comp.release.setTargetAtTime(limiterOn ? 0.12 : 0.25, ctx.currentTime, 0.03); }
+    if (nodes.comp) { nodes.comp.threshold.setTargetAtTime(limiterOn ? -12 : 0, ctx.currentTime, 0.03); nodes.comp.knee.setTargetAtTime(0, ctx.currentTime, 0.03); nodes.comp.ratio.setTargetAtTime(limiterOn ? 20 : 1, ctx.currentTime, 0.03); nodes.comp.attack.setTargetAtTime(limiterOn ? 0.003 : 0.01, ctx.currentTime, 0.03); nodes.comp.release.setTargetAtTime(limiterOn ? 0.12 : 0.25, ctx.currentTime, 0.03); }
     if (nodes.warm) {
       var t = ctx.currentTime, on = tapeOn;
       nodes.warm.gain.setTargetAtTime(on ? v('warm') : 0, t, 0.05);
