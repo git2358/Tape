@@ -642,7 +642,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       var node = ctx.createMediaElementSource(a), gain = ctx.createGain();
       gain.gain.value = 0; node.connect(gain); gain.connect(tapeOn ? nodes.input : nodes.comp);
       var targetTime = 0, metadataReady = false, seekReady = false, dataReady = false;
-      mixDeck = { id:id, a:a, node:node, gain:gain, ready:false };
+      mixDeck = { id:id, a:a, node:node, gain:gain, ready:false, priming:false, primed:false, preRoll:0 };
       function updateMixDeckReady() {
         if (!mixDeck || mixDeck.a !== a || !metadataReady || !seekReady || !dataReady) return;
         if (Math.abs(a.currentTime - targetTime) > 0.75 || a.readyState < 2) return;
@@ -651,7 +651,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       a.addEventListener('loadedmetadata', function () {
         if (!mixDeck || mixDeck.a !== a || !isFinite(a.duration) || a.duration <= 0) return;
         t.dur = a.duration;
-        targetTime = a.duration * 0.2;
+        mixDeck.preRoll = Math.min(2.5, a.duration * 0.1);
+        targetTime = Math.max(0, a.duration * 0.2 - mixDeck.preRoll);
         metadataReady = true;
         try {
           a.currentTime = targetTime;
@@ -675,11 +676,24 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       a.load();
     } catch (e) { try { a.pause(); } catch (x) {} mixDeck = null; }
   }
+  function primeMixDeck() {
+    if (!mixDeck || !mixDeck.ready || mixDeck.priming || mixDeck.primed) return;
+    var deck = mixDeck;
+    deck.priming = true;
+    var result;
+    try { result = deck.a.play(); } catch (e) { deck.priming = false; return; }
+    function primed() {
+      if (!mixDeck || mixDeck !== deck) return;
+      deck.priming = false;
+      deck.primed = true;
+    }
+    if (result && result.then) result.then(primed).catch(function () { if (mixDeck === deck) deck.priming = false; });
+    else primed();
+  }
   function beginMixTransition(duration) {
     if (!mixDeck || !mixDeck.ready || !audio || !ctx || mixTransition || !audio.mixGain) return;
     var deck = mixDeck, oldGain = audio.mixGain;
     mixTransition = { id:deck.id, deck:deck, startedAt:0, duration:duration, waiting:true };
-    var result = deck.a.play();
     function startFade() {
       if (!mixTransition || mixTransition.deck !== deck || !audio) return;
       var now = ctx.currentTime;
@@ -690,6 +704,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       oldGain.gain.linearRampToValueAtTime(0, now + duration);
       deck.gain.gain.linearRampToValueAtTime(1, now + duration);
     }
+    if (deck.primed && !deck.a.paused) { startFade(); return; }
+    var result = deck.a.play();
     if (result && result.then) result.then(startFade).catch(function () { if (mixTransition && mixTransition.deck === deck) discardMixDeck(); });
     else startFade();
   }
@@ -723,7 +739,8 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
       var id = chooseMixNextId();
       if (id != null) prepareMixDeck(id);
     }
-    if (mixDeck && mixDeck.ready && now >= start) {
+    if (mixDeck && mixDeck.ready && now >= start - mixDeck.preRoll) primeMixDeck();
+    if (mixDeck && mixDeck.ready && mixDeck.primed && now >= start) {
       beginMixTransition(Math.min(fade, Math.max(1, end - now)));
     }
     /* If the next source is slow, let this track continue naturally rather than
