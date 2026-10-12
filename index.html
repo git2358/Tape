@@ -566,7 +566,13 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
     a.addEventListener('loadedmetadata', function () { if (isFinite(a.duration) && a.duration > 0) { t.dur = a.duration; if (mixOn && audio && audio.a === a && a.currentTime < a.duration * 0.2) { try { a.currentTime = a.duration * 0.2; } catch (e) {} } renderList(); } });
     a.addEventListener('playing', function () { updateHiss(); failStreak = 0; if ('mediaSession' in navigator && audio && audio.a === a) { try { navigator.mediaSession.playbackState = 'playing'; } catch (e) {} } });
     a.addEventListener('pause', function () { updateHiss(); if ('mediaSession' in navigator && audio && audio.a === a && (!audio.bgA || audio.bgA.paused)) { try { navigator.mediaSession.playbackState = 'paused'; } catch (e) {} } });
-    a.addEventListener('ended', function () { updateHiss(); if (audio && audio.a === a && !(mixOn && mixTransition)) next(true); });
+    a.addEventListener('ended', function () {
+      updateHiss();
+      if (audio && audio.a === a) {
+        if (mixOn && mixTransition && mixTransition.waiting) discardMixDeck();
+        if (!(mixOn && mixTransition)) next(true);
+      }
+    });
     a.addEventListener('error', function () {
       if (!audio || audio.fxA !== a) return;
       if (remote && !plain) { say('That server blocks tape processing. Playing without the effect.'); t.plain = true; playId(id, autoplay, true, true); return; }
