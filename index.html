@@ -124,6 +124,16 @@ body[data-theme="rock"] .panel { box-shadow:inset 0 1px 0 #ffffff10,0 10px 30px 
 .marquee.run span { animation: scroll 14s linear infinite; }
 @keyframes scroll { from { transform: translateX(0); } to { transform: translateX(-100%); } }
 canvas#viz { display: block; width: 100%; height: 160px; }
+.vfd-glass { cursor: zoom-in; }
+.vfd-glass:focus-visible { outline: 2px solid var(--vfd); outline-offset: 4px; }
+.vfd.is-fullscreen { position: fixed; inset: 0; z-index: 10000; width: 100%; height: 100vh; height: 100dvh; max-width: none; margin: 0; border-radius: 0; overflow: auto; display: flex; flex-direction: column; justify-content: center; padding: clamp(12px, 3vw, 32px); background: var(--room); }
+.vfd.is-fullscreen .vfd-glass { width: 100%; max-width: 1500px; margin: auto; padding: clamp(12px, 2.5vw, 30px); cursor: zoom-out; }
+.vfd.is-fullscreen .vfd-row { font-size: clamp(24px, 4vw, 56px); }
+.vfd.is-fullscreen .marquee { font-size: clamp(30px, 6vw, 76px); margin-block: 10px 14px; }
+.vfd.is-fullscreen canvas#viz { height: clamp(180px, 43vh, 520px); }
+.vfd.is-fullscreen .viz-modes .mode { padding: 8px 14px; font-size: 13px; }
+.vfd.is-fullscreen .chips { font-size: clamp(20px, 3vw, 34px); gap: 8px 20px; margin-top: 14px; }
+body.vfd-fullscreen { overflow: hidden; }
 .viz-modes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
 .viz-modes .mode { padding: 5px 9px; font-size: 11px; letter-spacing: .09em; }
 .chips { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 20px; margin-top: 6px; }
@@ -239,7 +249,7 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   <div class="theme-tools"><label for="themeSelect">Cassette theme <select id="themeSelect"><option value="auto">Auto detect</option><option value="generic">Generic / unknown</option><option value="voice">Voice / Podcast</option><option value="pop">Pop · Neon 90s</option><option value="rock">Rock / Metal</option><option value="edm">EDM / Dance</option><option value="hiphop">Hip-hop / R&amp;B</option><option value="jazz">Jazz / Soul</option><option value="retro">Synth-pop / Retro</option></select></label><span id="genreReadout" aria-live="polite">GENRE -- · BPM --</span></div>
   <div class="grid">
     <section class="panel vfd" aria-label="Display">
-      <div class="vfd-glass">
+      <div class="vfd-glass" tabindex="0" title="Click to expand or exit full-screen display" aria-label="VFD display. Click to toggle full-screen view.">
         <div class="vfd-row"><span id="vTrk">TRK --/--</span><span id="vTime">0:00</span><span id="vRem">-0:00</span></div>
         <div class="marquee" id="marq"><span id="vTitle">INSERT TAPE</span></div>
         <canvas id="viz" aria-label="Level display"></canvas>
@@ -1588,6 +1598,32 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
   }
 
   /* ---------- events ---------- */
+  var vfdPanel = $('.vfd'), vfdGlass = $('.vfd-glass');
+  function toggleVfdFullscreen() {
+    var active = vfdPanel.classList.toggle('is-fullscreen');
+    document.body.classList.toggle('vfd-fullscreen', active);
+    vfdGlass.title = active ? 'Click to exit full-screen display' : 'Click to expand full-screen display';
+    vfdGlass.setAttribute('aria-label', active ? 'VFD display. Click to exit full-screen view.' : 'VFD display. Click to toggle full-screen view.');
+    requestAnimationFrame(drawViz);
+  }
+  vfdGlass.addEventListener('click', function (e) {
+    if (e.target.closest('button')) return;
+    toggleVfdFullscreen();
+  });
+  vfdGlass.addEventListener('keydown', function (e) {
+    if (e.target !== vfdGlass || (e.key !== 'Enter' && e.key !== ' ')) return;
+    e.preventDefault();
+    toggleVfdFullscreen();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && vfdPanel.classList.contains('is-fullscreen')) {
+      vfdPanel.classList.remove('is-fullscreen');
+      document.body.classList.remove('vfd-fullscreen');
+      vfdGlass.title = 'Click to expand full-screen display';
+      vfdGlass.setAttribute('aria-label', 'VFD display. Click to toggle full-screen view.');
+      requestAnimationFrame(drawViz);
+    }
+  });
   function hold(el, d) {
     el.addEventListener('pointerdown', function (e) { e.preventDefault(); initAudio(); el._held = false; el._t = setTimeout(function () { el._held = true; startSeek(d); }, 260); });
     var up = function () { clearTimeout(el._t); if (el._held) { el._held = false; endSeek(); el._swallow = true; } };
