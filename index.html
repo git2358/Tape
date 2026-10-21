@@ -358,7 +358,21 @@ textarea { width: 100%; min-height: 70px; resize: vertical; background: #0f0e0d;
 (function () {
   'use strict';
 
-  var versionStamp = 'tape20261012streamingexport00001';
+  function makeVersionHash(input) {
+    var h = [0x243f6a88, 0x85a308d3, 0x13198a2e, 0x03707344];
+    for (var i = 0; i < input.length; i++) {
+      var c = input.charCodeAt(i);
+      for (var j = 0; j < 4; j++) {
+        h[j] = Math.imul(h[j] ^ (c + i + j * 0x9e3779b9), 0x45d9f3b);
+        h[j] = (h[j] ^ (h[j] >>> 16)) >>> 0;
+      }
+    }
+    return h.map(function (n) { return n.toString(16).padStart(8, '0'); }).join('');
+  }
+  var sourceRequest = new XMLHttpRequest();
+  sourceRequest.open('GET', location.pathname, false);
+  sourceRequest.send(null);
+  var versionStamp = makeVersionHash(sourceRequest.responseText).slice(0, 32);
   var $ = function (s) { return document.querySelector(s); };
   $('#versionFooter').textContent = versionStamp;
   var ui = {};
